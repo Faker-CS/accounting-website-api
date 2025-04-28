@@ -7,25 +7,39 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Storage;
 
 class CompanyController extends Controller implements HasMiddleware
 {
     public static function middleware()
     {
         return
-        [
-            new Middleware('auth:sanctum', except : ['index', 'show']),
-        ];
-        
+            [
+                new Middleware('auth:sanctum', except: ['index', 'show','','']),
+            ];
+
     }
 
 
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index(Request $request)
     {
-        return company::all();
+        try {
+            $query = Company::with(['industries', 'activities', 'user'])
+                ->when($request->search, fn($q) => $q->where('company_name', 'LIKE', '%'.$request->search.'%'))
+                ->when($request->status, fn($q) => $q->where('status', $request->status))
+                ->when($request->industry_id, fn($q) => $q->whereHas('industries', fn($q) => $q->where('id', $request->industry_id)));
+
+            return response()->json([
+                'data' => $query->paginate($request->per_page ?? 10),
+                'message' => 'Companies retrieved successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -33,28 +47,58 @@ class CompanyController extends Controller implements HasMiddleware
      */
     public function store(Request $request)
     {
-        $validatedData = $request->validate([
-            'raison_sociale' => 'required',
-            'description' => 'required ',
-            'address' => 'required|string',
+        $validator = Validator ::make($request->all(),[
+            'company_name' => 'required|string|max:255',
+            'description' => 'required|string',
+            'logo' => 'image|max:3072',
             'founded' => 'required|date',
+            'raison_sociale' => 'required|string|max:255',
+            'capital_social' => 'nullable|numeric',
+            'numero_tva' => 'nullable|string|max:255',
+            'numero_siren' => 'nullable|string|max:255',
+            'numero_siret' => 'required|string|max:14',
             'forme_juridique' => 'required|in:EIRL,SARL,EURL,SAS,SASU,SA',
             'code_company_type' => 'required|in:APE,NEF',
-            'numero_siret' => 'required|string|max:14',
-            'capital_social' => 'nullable|numeric',
-            'numero_tva' => 'nullable|string',
-            'numero_siren' => 'nullable|string',
-            'logo' => 'nullable|string',
-            'company_name' => 'required|string',
-            
-            
-            'code_company_value' => 'required|string',
-            'status_id' => 'required|exists:statuses,id',
+            'code_company_value' => 'required|string|max:255',
+            'adresse_siege_social' => 'required|string|max:255',
+            'code_postale' => 'required|string|max:10',
+            'ville' => 'required|string|max:255',
+            'convention_collective' => 'nullable|string|max:255',
+            'chiffre_affaire' => 'nullable|numeric',
+            'tranche_a' => 'nullable|numeric',
+            'tranche_b' => 'nullable|numeric',
+            'nombre_salaries' => 'nullable|integer',
+            'moyenne_age' => 'nullable|integer',
+            'nombre_salaries_cadres' => 'nullable|integer',
+            'moyenne_age_cadres' => 'nullable|integer',
+            'nombre_salaries_non_cadres' => 'nullable|integer',
+            'moyenne_age_non_cadres' => 'nullable|integer',
         ]);
 
-        $company = $request->user()->companies()->create($validatedData);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
 
-        return response()->json($company, 201);
+        try {
+            $data = $validator->validated();
+            
+            // Handle logo upload
+            $data['logo'] = $request->file('logo')->store('company-logos', 'public');
+            
+            $company = Company::create($data);
+            
+            // Attach relationships
+            $company->industries()->attach($request->industries);
+            $company->activities()->attach($request->activities);
+
+            return response()->json([
+                'data' => $company->load(['industries', 'activities']),
+                'message' => 'Company created successfully'
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -62,7 +106,10 @@ class CompanyController extends Controller implements HasMiddleware
      */
     public function show(company $company)
     {
-        return $company;
+        return response()->json([
+            'data' => $company->load(['industries', 'activities', 'user']),
+            'message' => 'Company retrieved successfully'
+        ]);
     }
 
     /**
@@ -70,28 +117,66 @@ class CompanyController extends Controller implements HasMiddleware
      */
     public function update(Request $request, company $company)
     {
-        Gate::authorize('modify', $company);
-
-        $validatedData = $request->validate([
-            'raison_sociale' => 'required',
-            'description' => 'required ',
-            'address' => 'required|string',
+        $validator = Validator ::make($request->all(),[
+            'company_name' => 'required|string|max:255',
+            'description' => 'required|string',
+            'logo' => 'image|max:3072',
             'founded' => 'required|date',
+            'raison_sociale' => 'required|string|max:255',
+            'capital_social' => 'nullable|numeric',
+            'numero_tva' => 'nullable|string|max:255',
+            'numero_siren' => 'nullable|string|max:255',
+            'numero_siret' => 'required|string|max:14',
             'forme_juridique' => 'required|in:EIRL,SARL,EURL,SAS,SASU,SA',
             'code_company_type' => 'required|in:APE,NEF',
-            'numero_siret' => 'required|string|max:14',
-            'capital_social' => 'nullable|numeric',
-            'numero_tva' => 'nullable|string',
-            'numero_siren' => 'nullable|string',
-            'logo' => 'nullable|string',
-            
-            
-            'status_id' => 'required|exists:statuses,id',
+            'code_company_value' => 'required|string|max:255',
+            'adresse_siege_social' => 'required|string|max:255',
+            'code_postale' => 'required|string|max:10',
+            'ville' => 'required|string|max:255',
+            'convention_collective' => 'nullable|string|max:255',
+            'chiffre_affaire' => 'nullable|numeric',
+            'tranche_a' => 'nullable|numeric',
+            'tranche_b' => 'nullable|numeric',
+            'nombre_salaries' => 'nullable|integer',
+            'moyenne_age' => 'nullable|integer',
+            'nombre_salaries_cadres' => 'nullable|integer',
+            'moyenne_age_cadres' => 'nullable|integer',
+            'nombre_salaries_non_cadres' => 'nullable|integer',
+            'moyenne_age_non_cadres' => 'nullable|integer',
         ]);
 
-        $company->update($validatedData);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
 
-        return response()->json($company, 200);
+        try {
+            $data = $validator->validated();
+
+            // Handle logo update
+            if ($request->hasFile('logo')) {
+                Storage::delete($company->logo);
+                $data['logo'] = $request->file('logo')->store('company-logos', 'public');
+            }
+
+            $company->update($data);
+            
+            // Sync relationships
+            if ($request->has('industries')) {
+                $company->industries()->sync($request->industries);
+            }
+            
+            if ($request->has('activities')) {
+                $company->activities()->sync($request->activities);
+            }
+
+            return response()->json([
+                'data' => $company->fresh(['industries', 'activities']),
+                'message' => 'Company updated successfully'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -99,8 +184,12 @@ class CompanyController extends Controller implements HasMiddleware
      */
     public function destroy(company $company)
     {
-        $company->delete();
-
-        return response()->json(null, 204);
+        try {
+            Storage::delete($company->logo);
+            $company->delete();
+            return response()->json(['message' => 'Company deleted successfully']);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 }

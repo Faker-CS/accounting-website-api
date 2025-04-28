@@ -11,11 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('statuses', function (Blueprint $table) {
-            $table->id(); // Ensure this is the primary key
-            $table->string('name');
-            $table->text('description')->nullable();
-            $table->softDeletes();
+        Schema::create('activities', function (Blueprint $table) {
+            $table->id();
+            $table->string('code', 10);
+            $table->string('name', 100);
             $table->timestamps();
         });
     }
@@ -25,7 +24,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('statuses');
+        Schema::dropIfExists('activities');
     }
 };
-

@@ -11,28 +11,32 @@ class company extends Model
     use HasFactory;
     protected $table = 'companies';
     protected $fillable = [
-        'raison_sociale',
+        'company_name',
         'description',
-        'address',
+        'logo',
         'founded',
-        'forme_juridique',
-        'code_company_type',
-        'numero_siret',
+        'raison_sociale',
         'capital_social',
         'numero_tva',
         'numero_siren',
+        'numero_siret',
+        'forme_juridique',
+        'code_company_type',
         'code_company_value',
-        'masse_salariale',
-        'masse_salariale_tranche_a',
-        'masse_salariale_tranche_b',
+        'adresse_siege_social',
+        'code_postale',
+        'ville',
+        'convention_collective',
+        'chiffre_affaire',
+        'tranche_a',
+        'tranche_b',
         'nombre_salaries',
         'moyenne_age',
         'nombre_salaries_cadres',
         'moyenne_age_cadres',
         'nombre_salaries_non_cadres',
         'moyenne_age_non_cadres',
-        'status_id',
-        'logo'
+        'user_id'
     ];
 
     /**
@@ -47,11 +51,17 @@ class company extends Model
         ];
     }
 
-    public function status()
+
+    public function industries()
     {
-        return $this->belongsTo(Status::class);
+        return $this->belongsToMany(Industry::class);
     }
 
+    public function activities()
+    {
+        return $this->belongsToMany(Activity::class);
+    }
+    
     public function user()
     {
         return $this->belongsToMany(User::class);

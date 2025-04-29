@@ -47,23 +47,25 @@ class company extends Model
     protected function casts(): array
     {
         return [
-            'created_at' => 'datetime', 
+            'created_at' => 'datetime',
         ];
     }
 
 
     public function industries()
     {
-        return $this->belongsToMany(Industry::class);
+        return $this->belongsToMany(Industry::class, 'company_industry', 'company_id', 'industry_id')
+            ->withPivot('company_id', 'industry_id');
     }
 
     public function activities()
     {
-        return $this->belongsToMany(Activity::class);
+        return $this->belongsToMany(Activity::class, 'company_activity', 'company_id', 'activity_id')
+            ->withPivot('company_id', 'activity_id');
     }
-    
+
     public function user()
     {
-        return $this->belongsToMany(User::class);
-    }
+        return $this->belongsTo(User::class, 'user_id', 'id');
+    }   
 }

@@ -16,7 +16,7 @@ class CompanyController extends Controller implements HasMiddleware
     {
         return
             [
-                new Middleware('auth:sanctum', except: ['index', 'show','','']),
+                new Middleware('auth:sanctum', except: ['index', 'show']),
             ];
 
     }
@@ -33,10 +33,7 @@ class CompanyController extends Controller implements HasMiddleware
                 ->when($request->status, fn($q) => $q->where('status', $request->status))
                 ->when($request->industry_id, fn($q) => $q->whereHas('industries', fn($q) => $q->where('id', $request->industry_id)));
 
-            return response()->json([
-                'data' => $query->paginate($request->per_page ?? 10),
-                'message' => 'Companies retrieved successfully'
-            ]);
+            return response()->json($query->get()); // Return the data directly without wrapping it in a 'data' key
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -108,7 +105,6 @@ class CompanyController extends Controller implements HasMiddleware
     {
         return response()->json([
             'data' => $company->load(['industries', 'activities', 'user']),
-            'message' => 'Company retrieved successfully'
         ]);
     }
 
@@ -184,12 +180,9 @@ class CompanyController extends Controller implements HasMiddleware
      */
     public function destroy(company $company)
     {
-        try {
-            Storage::delete($company->logo);
+            // Storage::delete($company->logo);
             $company->delete();
             return response()->json(['message' => 'Company deleted successfully']);
-        } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 500);
-        }
+        
     }
 }

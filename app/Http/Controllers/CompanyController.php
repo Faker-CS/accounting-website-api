@@ -14,13 +14,19 @@ class CompanyController extends Controller implements HasMiddleware
 {
     public static function middleware()
     {
-        return
-            [
-                new Middleware('auth:sanctum', except: ['index', 'show']),
-            ];
+        // return
+        //     [
+        //         new Middleware('auth:sanctum', except: ['index', 'show']),
+        //     ];
 
     }
 
+    public function __construct()
+    {
+
+        //$this->middleware('auth:sanctum')->except(['index', 'show']);
+        //$this->middleware('role:comptable')->only(['store', 'update', 'destroy']);
+    }
 
     /**
      * Display a listing of the resource.
@@ -29,7 +35,7 @@ class CompanyController extends Controller implements HasMiddleware
     {
         try {
             $query = Company::with(['industries', 'activities', 'user'])
-                ->when($request->search, fn($q) => $q->where('company_name', 'LIKE', '%'.$request->search.'%'))
+                ->when($request->search, fn($q) => $q->where('company_name', 'LIKE', '%' . $request->search . '%'))
                 ->when($request->status, fn($q) => $q->where('status', $request->status))
                 ->when($request->industry_id, fn($q) => $q->whereHas('industries', fn($q) => $q->where('id', $request->industry_id)));
 
@@ -44,7 +50,7 @@ class CompanyController extends Controller implements HasMiddleware
      */
     public function store(Request $request)
     {
-        $validator = Validator ::make($request->all(),[
+        $validator = Validator::make($request->all(), [
             'company_name' => 'required|string|max:255',
             'description' => 'required|string',
             'logo' => 'image|max:3072',
@@ -78,12 +84,12 @@ class CompanyController extends Controller implements HasMiddleware
 
         try {
             $data = $validator->validated();
-            
+
             // Handle logo upload
             $data['logo'] = $request->file('logo')->store('company-logos', 'public');
-            
+
             $company = Company::create($data);
-            
+
             // Attach relationships
             $company->industries()->attach($request->industries);
             $company->activities()->attach($request->activities);
@@ -101,11 +107,18 @@ class CompanyController extends Controller implements HasMiddleware
     /**
      * Display the specified resource.
      */
-    public function show(company $company)
+    public function show( $company)
     {
+        
+        $data = company::with(['industries', 'activities', 'user'])
+            ->where('id', $company->id)
+            ->first();
+        if (!$data) {
+            return response()->json(['message'=> ''],404);
+        }
         return response()->json([
             'data' => $company->load(['industries', 'activities', 'user']),
-        ]);
+        ], 200);
     }
 
     /**
@@ -113,7 +126,7 @@ class CompanyController extends Controller implements HasMiddleware
      */
     public function update(Request $request, company $company)
     {
-        $validator = Validator ::make($request->all(),[
+        $validator = Validator::make($request->all(), [
             'company_name' => 'required|string|max:255',
             'description' => 'required|string',
             'logo' => 'image|max:3072',
@@ -155,12 +168,12 @@ class CompanyController extends Controller implements HasMiddleware
             }
 
             $company->update($data);
-            
+
             // Sync relationships
             if ($request->has('industries')) {
                 $company->industries()->sync($request->industries);
             }
-            
+
             if ($request->has('activities')) {
                 $company->activities()->sync($request->activities);
             }
@@ -178,11 +191,15 @@ class CompanyController extends Controller implements HasMiddleware
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(company $company)
-    {
-            // Storage::delete($company->logo);
-            $company->delete();
-            return response()->json(['message' => 'Company deleted successfully']);
-        
+    public function destroy($id)
+    { 
+         $company = company::findOrFail($id);
+        if (!$company) {
+            return response()->json(['message' => 'Company not found'], 404);
+        }
+        // Storage::delete($company->logo);
+        $company->delete();
+        return response()->json([ "message" => 'Company deleted successfully'], 200);
+
     }
 }

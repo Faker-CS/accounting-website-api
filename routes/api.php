@@ -20,15 +20,11 @@ Route::middleware('api')->group(function () {
     // Company management routes
     Route::apiResource('companies', CompanyController::class);
     Route::get('companies', [CompanyController::class, 'index']);
-    Route::get('companies/{company}', [CompanyController::class, 'show']);
-
-    // Industry routes (Comptable only)
-    Route::apiResource('industries', IndustryController::class)
-        ->middleware('role:comptable');
-
-    // Activity routes (Comptable only)
-    Route::apiResource('activities', ActivityController::class)
-        ->middleware('role:comptable');
+    Route::get('companies/{id}', [CompanyController::class, 'show']);
+    
     // List all aide-comptables
     Route::get('/aideComptables', [AideComptableController::class, 'index']);
+    Route::delete('/aideComptable/{id}', [AideComptableController::class, 'destroy']);
+    Route::post('/aideComptable', [AideComptableController::class, 'store']);
+    
 });

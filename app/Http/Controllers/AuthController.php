@@ -84,9 +84,25 @@ class AuthController extends Controller
         if (!$token = JWTAuth::attempt($credentials)) {
             return response()->json(['error' => 'Invalid credentials'], 401);
         }
+        $user = Auth::user();
+
+        $roles = $user->roles ? $user->roles->pluck('name')->toArray() : [];
 
         return response()->json([
-            'user' => Auth::user(),
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phoneNumber' => $user->phoneNumber,
+                'city' => $user->city,
+                'state' => $user->state,
+                'address' => $user->address,
+                'zipCode' => $user->zipCode,
+                'email_verified_at' => $user->email_verified_at,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+                'roles' => $roles, // Only role names, e.g., ["aide-comptable"]
+            ],
             'accessToken' => $token,
         ]);
     }
@@ -99,6 +115,21 @@ class AuthController extends Controller
 
     public function user()
     {
-        return response()->json(Auth::user());
+        $user = Auth::user();
+        $roleName = $user->roles->pluck('name')->first();
+        return response()->json([
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phoneNumber' => $user->phoneNumber,
+                'city' => $user->city,
+                'state' => $user->state,
+                'address' => $user->address,
+                'zipCode' => $user->zipCode,
+                'email_verified_at' => $user->email_verified_at,
+                'created_at' => $user->created_at,
+                'updated_at' => $user->updated_at,
+                'roles' => $roleName,
+            ],);
     }
 }

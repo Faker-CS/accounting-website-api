@@ -56,17 +56,17 @@ class CompanyController extends Controller implements HasMiddleware
             'logo' => 'image|max:3072',
             'founded' => 'required|date',
             'raison_sociale' => 'required|string|max:255',
-            'capital_social' => 'nullable|numeric',
+            
             'numero_tva' => 'nullable|string|max:255',
             'numero_siren' => 'nullable|string|max:255',
-            'numero_siret' => 'required|string|max:14',
+            
             'forme_juridique' => 'required|in:EIRL,SARL,EURL,SAS,SASU,SA',
             'code_company_type' => 'required|in:APE,NEF',
             'code_company_value' => 'required|string|max:255',
             'adresse_siege_social' => 'required|string|max:255',
             'code_postale' => 'required|string|max:10',
             'ville' => 'required|string|max:255',
-            'convention_collective' => 'nullable|string|max:255',
+            
             'chiffre_affaire' => 'nullable|numeric',
             'tranche_a' => 'nullable|numeric',
             'tranche_b' => 'nullable|numeric',
@@ -107,69 +107,66 @@ class CompanyController extends Controller implements HasMiddleware
     /**
      * Display the specified resource.
      */
-    public function show( $company)
+    public function show($id)
     {
-        
-        $data = company::with(['industries', 'activities', 'user'])
-            ->where('id', $company->id)
-            ->first();
-        if (!$data) {
-            return response()->json(['message'=> ''],404);
+
+        $company = Company::findOrFail($id);
+        if (!$company) {
+            return response()->json(['message' => 'Company not found'], 404);
         }
-        return response()->json([
-            'data' => $company->load(['industries', 'activities', 'user']),
-        ], 200);
+        return $company;
     }
 
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, company $company)
+    public function update(Request $request, Company $company)
     {
-        $validator = Validator::make($request->all(), [
-            'company_name' => 'required|string|max:255',
-            'description' => 'required|string',
-            'logo' => 'image|max:3072',
-            'founded' => 'required|date',
-            'raison_sociale' => 'required|string|max:255',
-            'capital_social' => 'nullable|numeric',
-            'numero_tva' => 'nullable|string|max:255',
-            'numero_siren' => 'nullable|string|max:255',
-            'numero_siret' => 'required|string|max:14',
-            'forme_juridique' => 'required|in:EIRL,SARL,EURL,SAS,SASU,SA',
-            'code_company_type' => 'required|in:APE,NEF',
-            'code_company_value' => 'required|string|max:255',
-            'adresse_siege_social' => 'required|string|max:255',
-            'code_postale' => 'required|string|max:10',
-            'ville' => 'required|string|max:255',
-            'convention_collective' => 'nullable|string|max:255',
-            'chiffre_affaire' => 'nullable|numeric',
-            'tranche_a' => 'nullable|numeric',
-            'tranche_b' => 'nullable|numeric',
-            'nombre_salaries' => 'nullable|integer',
-            'moyenne_age' => 'nullable|integer',
-            'nombre_salaries_cadres' => 'nullable|integer',
-            'moyenne_age_cadres' => 'nullable|integer',
-            'nombre_salaries_non_cadres' => 'nullable|integer',
-            'moyenne_age_non_cadres' => 'nullable|integer',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
-        }
-
         try {
-            $data = $validator->validated();
+            \Log::info('Raw incoming request: ', $request->all());
 
-            // Handle logo update
+            // Manual mapping from frontend keys to database columns
+            $mappedData = [
+                'company_name' => $request->raisonSociale,
+                'industry' => $request->Industrie,
+                'logo' => $request->avatarUrl, // if not a file upload
+                'founded' => $request->date,
+                'code_company_value' => $request->refCnss,
+                'forme_juridique' => $request->formeJuridique,
+                'code_company_type' => $request->activiteEntreprise,
+                'adresse_siege_social' => $request->adresseSiegeSocial,
+                'code_postale' => $request->zipCode,
+                'ville' => $request->city,
+                'email' => $request->email,
+                'phone_number' => $request->phoneNumber,
+                'numero_tva' => $request->matriculeFiscale,
+                'numero_siren' => $request->siren,
+                'status' => $request->status,
+                'raison_sociale' => $request->raisonSociale,
+                'chiffre_affaire' => $request->chiffreAffaire,
+                'tranche_a' => $request->trancheA,
+                'tranche_b' => $request->trancheB,
+                'nombre_salaries' => $request->nombreSalaries,
+                'moyenne_age' => $request->moyenneAge,
+                'nombre_salaries_cadres' => $request->nombreSalariesCadres,
+                'moyenne_age_cadres' => $request->moyenneAgeCadres,
+                'nombre_salaries_non_cadres' => $request->nombreSalariesNonCadres,
+                'moyenne_age_non_cadres' => $request->moyenneAgeNonCadres,
+            ];
+
+            // If logo is uploaded as a file (not just string name)
             if ($request->hasFile('logo')) {
                 Storage::delete($company->logo);
-                $data['logo'] = $request->file('logo')->store('company-logos', 'public');
+                $mappedData['logo'] = $request->file('logo')->store('company-logos', 'public');
             }
+            \Log::info('Mapped Data: ', $mappedData);
+            \Log::info('Company Before Update: ', $company->toArray());
 
-            $company->update($data);
+            $company->fill($mappedData);
+            $company->save();
 
-            // Sync relationships
+
+            // Sync relationships if they exist
             if ($request->has('industries')) {
                 $company->industries()->sync($request->industries);
             }
@@ -184,22 +181,24 @@ class CompanyController extends Controller implements HasMiddleware
             ]);
 
         } catch (\Exception $e) {
+            \Log::error('Update company failed: ' . $e->getMessage());
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
+
 
     /**
      * Remove the specified resource from storage.
      */
     public function destroy($id)
-    { 
-         $company = company::findOrFail($id);
+    {
+        $company = company::findOrFail($id);
         if (!$company) {
             return response()->json(['message' => 'Company not found'], 404);
         }
         // Storage::delete($company->logo);
         $company->delete();
-        return response()->json([ "message" => 'Company deleted successfully'], 200);
+        return response()->json(["message" => 'Company deleted successfully'], 200);
 
     }
 }

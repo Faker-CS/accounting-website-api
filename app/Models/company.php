@@ -16,17 +16,14 @@ class company extends Model
         'logo',
         'founded',
         'raison_sociale',
-        'capital_social',
         'numero_tva',
         'numero_siren',
-        'numero_siret',
         'forme_juridique',
         'code_company_type',
         'code_company_value',
         'adresse_siege_social',
         'code_postale',
         'ville',
-        'convention_collective',
         'chiffre_affaire',
         'tranche_a',
         'tranche_b',
@@ -36,7 +33,11 @@ class company extends Model
         'moyenne_age_cadres',
         'nombre_salaries_non_cadres',
         'moyenne_age_non_cadres',
-        'user_id'
+        'user_id',
+        'email',
+        'phone_number',
+        'status',
+        'industry',
     ];
 
     /**

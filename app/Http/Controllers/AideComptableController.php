@@ -68,7 +68,7 @@ class AideComptableController extends Controller
             // send the user an email
             $table = [
                 'view' => 'emails.usercreated',
-                'subject' => 'User Created',
+                'subject' => 'welcome to our platform..you can now login',
                 'data' => [
                     'name' => $user->name,
                     'email' => $user->email,
@@ -96,9 +96,7 @@ class AideComptableController extends Controller
      */
     public function show( $id)
     {
-        \Log::info('id: ' . $id);
         $user = User::role("aide-comptable")->findorfail($id);
-        \Log::info('id: ' . $id);
         if ($user) {
             
             return $user;

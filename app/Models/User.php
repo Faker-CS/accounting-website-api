@@ -17,6 +17,12 @@ class User extends Authenticatable implements JWTSubject
         'name',
         'email',
         'password',
+        'phoneNumber',
+        'city',
+        'state',
+        'address',
+        'zipCode',
+        'photo',
     ];
 
     protected $hidden = [
@@ -31,12 +37,36 @@ class User extends Authenticatable implements JWTSubject
     ];
 
     // JWTSubject
-    public function getJWTIdentifier() { return $this->getKey(); }
-    public function getJWTCustomClaims() { return []; }
+    public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+    public function getJWTCustomClaims()
+    {
+        return [];
+    }
 
     // Relation to companies (entreprise users)
     public function companies()
     {
-        return $this->hasMany(Company::class);
+        return $this->belongsToMany(Company::class);
     }
+
+    // Relation to conversations
+    public function sentMessages()
+    {
+        return $this->hasMany(Message::class, 'sender_id');
+    }
+
+    public function receivedMessages()
+    {
+        return $this->hasMany(Message::class, 'receiver_id');
+    }
+    public function conversations()
+    {
+        return $this->belongsToMany(Conversation::class, 'conversation_user')
+            ->withTimestamps();
+    }
+
+    
 }

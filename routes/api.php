@@ -3,9 +3,9 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CompanyController;
-use App\Http\Controllers\IndustryController;
-use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AideComptableController;
+use App\Http\Controllers\ChatController;
+use App\Http\Controllers\UserController;
 
 // Public login
 Route::post('login', [AuthController::class, 'login']);
@@ -26,5 +26,17 @@ Route::middleware('api')->group(function () {
     Route::get('/aideComptables', [AideComptableController::class, 'index']);
     Route::delete('/aideComptable/{id}', [AideComptableController::class, 'destroy']);
     Route::post('/aideComptable', [AideComptableController::class, 'store']);
+
+    // chat routes
+    Route::get('conversations', [ChatController::class, 'getConversations']);
+    Route::post('new-conversation', [ChatController::class,'createConversation']);
+    Route::get('conversations/{id}', [ChatController::class, 'getConversationById']);
+    Route::post('send-messages', [ChatController::class, 'sendMessage']);
+    Route::post('conversations/{id}/seen', [ChatController::class,'MarkAsSeen']);
+    Route::get('contacts/{id}', [ChatController::class,'getContacts']);
+
+    // User profile routes
+    Route::get('/profile', [UserController::class, 'edit']);
+    Route::put('/profile/{id}', [UserController::class, 'update']);
     
 });

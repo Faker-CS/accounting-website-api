@@ -123,8 +123,6 @@ class CompanyController extends Controller implements HasMiddleware
     public function update(Request $request, Company $company)
     {
         try {
-            \Log::info('Raw incoming request: ', $request->all());
-
             // Manual mapping from frontend keys to database columns
             $mappedData = [
                 'company_name' => $request->raisonSociale,
@@ -159,8 +157,6 @@ class CompanyController extends Controller implements HasMiddleware
                 Storage::delete($company->logo);
                 $mappedData['logo'] = $request->file('logo')->store('company-logos', 'public');
             }
-            \Log::info('Mapped Data: ', $mappedData);
-            \Log::info('Company Before Update: ', $company->toArray());
 
             $company->fill($mappedData);
             $company->save();

@@ -68,5 +68,19 @@ class company extends Model
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
-    }   
+    }
+    
+    public function sentMessages()
+    {
+        return $this->hasMany(Message::class, 'sender_id')->where('sender_type', 'company');
+    }
+    public function receivedMessages()
+    {
+        return $this->hasMany(Message::class, 'receiver_id');
+    }
+    
+    public function conversations()
+    {
+        return $this->belongsToMany(Conversation::class, 'conversation_user');
+    }
 }

@@ -9,14 +9,15 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class UserCreated extends Mailable
+class CompanyCreatedMail extends Mailable
 {
     use Queueable, SerializesModels;
-    public $subject;
-    public $view;
-    public $data;
 
-    public $attach=null;
+    public $view;
+    public $subject;
+    public $data;
+    public $attach = null;
+
     /**
      * Create a new message instance.
      */
@@ -27,6 +28,7 @@ class UserCreated extends Mailable
         $this->data = $data;
         $this->attach = $attach;
     }
+
 
     /**
      * Get the message envelope.
@@ -44,7 +46,7 @@ class UserCreated extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: $this->view,
+            view: 'view.name',
             with: [
                 'data' => $this->data,
             ],

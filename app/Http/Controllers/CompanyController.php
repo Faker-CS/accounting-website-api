@@ -127,7 +127,6 @@ class CompanyController extends Controller implements HasMiddleware
             $mappedData = [
                 'company_name' => $request->raisonSociale,
                 'industry' => $request->Industrie,
-                'logo' => $request->avatarUrl, // if not a file upload
                 'founded' => $request->date,
                 'code_company_value' => $request->refCnss,
                 'forme_juridique' => $request->formeJuridique,

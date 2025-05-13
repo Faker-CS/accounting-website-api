@@ -3,16 +3,17 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Models\User;
 
 class UserController extends Controller
 {
     public function edit(Request $request)
     {
-        // $user = User::findOrFail($id);
-        $user = auth()->user();
-        // $user = $request->user()
-        \Log::info('User profile accessed', ['user' => $user]);
+        $user = $request->user();
+        \Log::info('User profile accessed', [
+            'user_id' => $user->id,
+            'email' => $user->email,
+            'password' => $user->Hash::check($user->password),
+        ]);
         return response()->json([
             $request->user(),
         ]);

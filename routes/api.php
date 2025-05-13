@@ -11,7 +11,7 @@ use App\Http\Controllers\UserController;
 Route::post('login', [AuthController::class, 'login']);
 
 // Protected routes (JWT)
-Route::middleware('api')->group(function () {
+Route::middleware('auth:api')->group(function () {
     // Authenticated user routes
     Route::get('user', [AuthController::class, 'user']);
     Route::post('logout', [AuthController::class, 'logout']);
@@ -26,6 +26,7 @@ Route::middleware('api')->group(function () {
     Route::get('/aideComptables', [AideComptableController::class, 'index']);
     Route::delete('/aideComptable/{id}', [AideComptableController::class, 'destroy']);
     Route::post('/aideComptable', [AideComptableController::class, 'store']);
+    Route::put('/aideComptable/{id}', [AideComptableController::class, 'update']);
 
     // chat routes
     Route::get('conversations', [ChatController::class, 'getConversations']);
@@ -37,6 +38,6 @@ Route::middleware('api')->group(function () {
 
     // User profile routes
     Route::get('/profile', [UserController::class, 'edit']);
-    Route::put('/profile/{id}', [UserController::class, 'update']);
+    Route::put('/profile', [UserController::class, 'update']);
     
 });

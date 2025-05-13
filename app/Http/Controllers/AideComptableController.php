@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use App\Mail\UserCreated;
+use Illuminate\Support\Facades\Storage;
 
 
 class AideComptableController extends Controller
@@ -24,9 +25,13 @@ class AideComptableController extends Controller
      */
     public function store(Request $request)
     {
+        \Log::info('User creation request', [
+            'request' => $request->all(),
+        ]);
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users',
+            'avatarUrl' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'phoneNumber' => 'nullable|string|max:255',
             'city' => 'nullable|string|max:100',
             'state' => 'nullable|string|max:50',
@@ -36,29 +41,31 @@ class AideComptableController extends Controller
 
         if ($validator->fails()) {
             return response()->json([
-                'success'=> false,
-                'errors'=> $validator->errors(), 
+                'success' => false,
+                'errors' => $validator->errors(),
                 422
             ]);
         }
 
         try {
+            $path = $request->file('avatarUrl')->store('uploads', 'public');
             $password = \Str::random(8); // Generate a random password
             $user = User::create([
-                'name'=> $request->name,
-                'email'=> $request->email,
-                'phoneNumber'=> $request->phoneNumber,
-                'city'=> $request->city,
-                'state'=> $request->state,
-                'address'=> $request->address,
-                'zipCode'=> $request->zipCode,
-                'password'=> \Hash::make($password),
+                'name' => $request->name,
+                'email' => $request->email,
+                'phoneNumber' => $request->phoneNumber,
+                'city' => $request->city,
+                'state' => $request->state,
+                'address' => $request->address,
+                'zipCode' => $request->zipCode,
+                'password' => \Hash::make($password),
+                'photo' => $path,
             ]);
 
-            if(! $user) {
+            if (!$user) {
                 return response()->json([
-                    'success'=> false,
-                    'message'=> 'User not created',
+                    'success' => false,
+                    'message' => 'User not created',
                 ], 500);
             }
 
@@ -75,7 +82,7 @@ class AideComptableController extends Controller
                     'password' => $password,
                 ],
             ];
-            
+
             \Mail::to($user->email)->send(new UserCreated($table['view'], $table['subject'], $table['data'], null));
             return response()->json([
                 'email' => $user->email,
@@ -84,9 +91,9 @@ class AideComptableController extends Controller
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
-                'success'=> false,
-                'message'=> 'User not created',
-                'error'=> $e->getMessage(),
+                'success' => false,
+                'message' => 'User not created',
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
@@ -94,11 +101,11 @@ class AideComptableController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show( $id)
+    public function show($id)
     {
         $user = User::role("aide-comptable")->findorfail($id);
         if ($user) {
-            
+
             return $user;
         } else {
             return response()->json(['message' => 'User not found'], 404);

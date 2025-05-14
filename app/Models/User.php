@@ -46,11 +46,6 @@ class User extends Authenticatable implements JWTSubject
         return [];
     }
 
-    // Relation to companies (entreprise users)
-    public function companies()
-    {
-        return $this->belongsToMany(Company::class);
-    }
 
     // Relation to conversations
     public function sentMessages()
@@ -67,6 +62,16 @@ class User extends Authenticatable implements JWTSubject
         return $this->belongsToMany(Conversation::class, 'conversation_user')
             ->withTimestamps();
     }
+    
+    // Relation to companies (aide comptable entreprises)
+    public function companies()
+    {
+        return $this->hasMany(CompanyUser::class);
+    }
 
+    //gerant d'entreprise
+    public function company(){
+        return $this->belongsTo(Company::class, 'company_id', 'id');
+    }
     
 }

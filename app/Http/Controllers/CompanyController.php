@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\company;
+use App\Models\user;
+use App\Mail\CompanyCreatedMail;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controllers\HasMiddleware;
 use Illuminate\Routing\Controllers\Middleware;
@@ -51,7 +53,7 @@ class CompanyController extends Controller implements HasMiddleware
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'company_name' => 'required|string|max:255',
+            'name' => 'nullable|string|max:255',
             'description' => 'required|string',
             'logo' => 'image|max:3072',
             'founded' => 'required|date',
@@ -81,24 +83,46 @@ class CompanyController extends Controller implements HasMiddleware
         if ($validator->fails()) {
             return response()->json($validator->errors(), 422);
         }
-
+        
         try {
             $data = $validator->validated();
+            // creation user account
+            $password = \Str::random(8); // Generate a random password
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => \Hash::make($password),
+            ]);
 
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'User not created',
+                ], 500);
+            }
+            // Assign role to user
+            $user->assignRole('entreprise');
+            // Attach user to company
             // Handle logo upload
             $data['logo'] = $request->file('logo')->store('company-logos', 'public');
 
+            // send the user an email
+            $table = [
+                'view' => 'emails.companycreated',
+                'subject' => 'welcome to our platform..you can now login',
+                'data' => [
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'password' => $password,
+                ],
+            ];
+            //send mail to entreprise email
+            \Mail::to($user->email)->send(new CompanyCreatedMail($table['view'], $table['subject'], $table['data'], null));
+
             $company = Company::create($data);
-
-            // Attach relationships
-            $company->industries()->attach($request->industries);
-            $company->activities()->attach($request->activities);
-
-            return response()->json([
-                'data' => $company->load(['industries', 'activities']),
-                'message' => 'Company created successfully'
-            ], 201);
-
+            $user->company_id = $company->id;
+            $user->save();
+            
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }

@@ -88,7 +88,9 @@ class AuthController extends Controller
         \Log::info('User logged in: ' . $user);
 
         $roles = $user->roles ? $user->roles->pluck('name')->toArray() : [];
-
+        if($user->hasRole('entreprise')) {
+            $company = $user->company();
+        }
         return response()->json([
             'user' => [
                 'id' => $user->id,
@@ -103,6 +105,7 @@ class AuthController extends Controller
                 'created_at' => $user->created_at,
                 'updated_at' => $user->updated_at,
                 'roles' => $roles, // Only role names, e.g., ["aide-comptable"]
+                'photo' => $user->photo,
             ],
             'accessToken' => $token,
         ]);
@@ -135,6 +138,7 @@ class AuthController extends Controller
                 'created_at' => $user->created_at,
                 'updated_at' => $user->updated_at,
                 'roles' => $roleName,
+                'photo' => $user->photo,
             ],);
     }
 }

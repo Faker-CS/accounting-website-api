@@ -73,5 +73,10 @@ class User extends Authenticatable implements JWTSubject
     public function company(){
         return $this->belongsTo(Company::class, 'company_id', 'id');
     }
+
+    public function helperForms()
+    {
+        return $this->hasMany(HelperForms::class);
+    }
     
 }

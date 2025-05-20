@@ -9,10 +9,31 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\DocumentController;
 use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\FormController;
-use Spatie\Permission\Traits\HasRoles;
+use App\Http\Controllers\DemandeAssignController;
+use App\Http\Controllers\NotificationController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Broadcast;
+
+
+
 
 // Public login
 Route::post('login', [AuthController::class, 'login']);
+
+// Broadcasting auth (special handling)
+Route::post('/broadcasting/auth', function (Request $request) {
+    \Log::debug('Auth attempt', [
+        'user' => auth()->user(),
+        'channel_name' => $request->input('channel_name')
+    ]);
+    
+    if (!auth()->check()) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+
+    return Broadcast::auth($request);
+})->middleware('auth:api');
 
 // Protected routes (JWT)
 Route::middleware('auth:api')->group(function () {
@@ -55,6 +76,9 @@ Route::middleware('auth:api')->group(function () {
 
     // Submit Form
     Route::post('/form/{serviceId}', [FormController::class, 'submitForm']);
+    // assign form to aide-comptable
+    Route::post('/demandes/assign/{demandId}', [DemandeAssignController::class, 'assignHelperToDemande']);
+
 
 
     // Forms routes
@@ -73,7 +97,11 @@ Route::middleware('auth:api')->group(function () {
         Route::put('/user/profile/matricule', [UserController::class, 'updateProfileMatricule']);
         Route::post('/documents/upload', [DocumentController::class, 'uploadDocument']);
     });
-    
+
     Route::get('/user/documents/{serviceId}/{id}', [DocumentController::class, 'getUserDocumentsByService']);
 
+    // notifications
+    Route::get('/notifications', [NotificationController::class, 'getUserNotifications']);
+    Route::patch('/notifications/read', [NotificationController::class, 'allRead']);
+    Route::patch('/notifications/read/{id}', [NotificationController::class, 'read']);
 });

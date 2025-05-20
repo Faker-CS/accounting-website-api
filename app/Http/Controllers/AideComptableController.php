@@ -6,7 +6,6 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
 use App\Mail\UserCreated;
-use Illuminate\Support\Facades\Storage;
 
 
 class AideComptableController extends Controller

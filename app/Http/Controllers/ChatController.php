@@ -36,7 +36,6 @@ class ChatController extends Controller
     public function getConversations()
     {
         $user = Auth::user();
-        \Log::info('User ID: ', [$user]);
         $conversations = Conversation::whereHas('participants', function ($query) use ($user) {
             $query->where('user_id', $user->id);
         })
@@ -55,7 +54,7 @@ class ChatController extends Controller
 
     public function getConversationById($id)
     {
-        $user = Auth::id()?:1;
+        $user = Auth::id();
         \Log::info('User ID: ', [$user]);
 
         $conversation = Conversation::where('id', $id)
@@ -77,14 +76,19 @@ class ChatController extends Controller
         $user = User::find($id);
 
         if ($user->hasRole('comptable')) {
-            $aideComptables = User::whereHas('roles', function ($query) {
-                $query->where('name', 'aide-comptable');
+            // Comptable can see all aide-comptables and all entreprises
+            $contacts = User::whereHas('roles', function ($query) {
+                $query->whereIn('name', ['aide-comptable', 'entreprise']);
             })->get();
-            $companies = Company::all();
-            $contacts = $aideComptables->concat($companies);
         } elseif ($user->hasRole('aide-comptable')) {
-            $contacts = Company::where('responsible_id', $user->id)->get();
+            // Aide-comptable can see entreprises they're responsible for
+            $contacts = User::whereHas('roles', function ($query) {
+                $query->where('name', 'entreprise');
+            })
+                ->where('responsible_id', $user->id)
+                ->get();
         } else {
+            // Entreprise can see their responsible (aide-comptable or comptable)
             $contacts = collect([$user->responsible]);
         }
 
@@ -103,7 +107,7 @@ class ChatController extends Controller
             'participants.*.id' => 'required|exists:users,id',
             'messages' => 'required|array|min:1',
             'messages.0.senderId' => 'required|exists:users,id',
-            'messages.0.body' => 'nullable|string', 
+            'messages.0.body' => 'nullable|string',
             'company_id' => 'nullable|exists:companies,id'
         ])->validate();
 
@@ -111,8 +115,8 @@ class ChatController extends Controller
             return (int) $participant['id'];
         }, $validated['participants']);
 
-        $currentUserId = Auth::id()?:1;
-        
+        $currentUserId = Auth::id() ?: 1;
+
 
 
         // Ensure current user is included
@@ -135,7 +139,7 @@ class ChatController extends Controller
                 });
 
             if ($existing) {
-                return response()->json($existing->load(['participants','messages']), 200);
+                return response()->json($existing->load(['participants', 'messages']), 200);
             }
         }
 

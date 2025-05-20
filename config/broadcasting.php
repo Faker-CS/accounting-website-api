@@ -13,11 +13,11 @@ return [
             'app_id' => env('PUSHER_APP_ID'),
             'options' => [
                 'cluster' => env('PUSHER_APP_CLUSTER'),
-                'useTLS' => true,
-                'host' => env('PUSHER_HOST', null),
-                'port' => env('PUSHER_PORT', 6001),
-                'scheme' => env('PUSHER_SCHEME', 'https'),
                 'encrypted' => true,
+                'host' => 'api-' . env('PUSHER_APP_CLUSTER') . '.pusher.com',
+                'port' => env('PUSHER_PORT', 443),
+                'scheme' => env('PUSHER_SCHEME', 'https'),
+                'useTLS' => true,
             ],
         ],
 

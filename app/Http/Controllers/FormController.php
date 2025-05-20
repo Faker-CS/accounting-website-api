@@ -11,65 +11,88 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 // use App\Mail\ChangeStatutsMail;
+use App\Events\FormSubmitted;
 use Illuminate\Support\Facades\Mail;
 
 class FormController extends Controller
 {
     public function submitForm(Request $request, $serviceId)
-{
-    $user = Auth::user();
+    {
+        $user = Auth::user();
 
-    $form = Form::where('user_id', $user->id)
-        ->where('service_id', $serviceId)
-        ->with('service') // Charger le nom du service
-        ->first();
+        $form = Form::where('user_id', $user->id)
+            ->where('service_id', $serviceId)
+            ->with('service') // Charger le nom du service
+            ->first();
 
-    if (! $form) {
-        return response()->json(['status' => 'form_not_found']);
-    }
-
-    if ($form->status === "pending" || trim($form->status) === "") {
-        $form->status = 'review';
-        $form->save();
-
-        // 🔔 Notification pour l’utilisateur
-        Notification::create([
-            'user_id'     => $user->id,
-            'type'        => 'form_submission',
-            'title'       => 'Votre formulaire a été soumis pour examen.',
-            'serviceLink' => $serviceId,
-        ]);
-
-        // 🔔 Notification pour les admins
-        $admins = User::where('isAdmin', 1)->get();
-
-        foreach ($admins as $admin) {
-            Notification::create([
-                'user_id'     => $admin->id,
-                'type'        => 'form_submission',
-                'title'       => "Nouvelle soumission de formulaire de {$user->name} pour le service « {$form->service->name} ».",
-                'serviceLink' => "/dashboard/forms/{$form->id}",
-                'isUnRead'    => true,
-            ]);
+        if (!$form) {
+            return response()->json(['status' => 'form_not_found']);
         }
 
-        return response()->json(['status' => 'submitted_for_review']);
-    }
+        if ($form->status === "pending" || trim($form->status) === "") {
+            $form->status = 'review';
+            $form->save();
 
-    if ($form->status === "review") {
-        return response()->json(['status' => 'form_in_review']);
-    }
+            // Notification pour l’utilisateur
+            Notification::create([
+                'user_id' => $user->id,
+                'type' => 'form_submission',
+                'title' => 'Votre formulaire a été soumis pour examen.',
+                'serviceLink' => $serviceId,
+                'isUnRead' => true,
+            ]);
+            broadcast(new FormSubmitted([
+                'title' => 'Votre formulaire a été soumis pour examen.',
+                'type' => 'form_submission',
+                'link' => $serviceId
+            ], $user->id));
 
-    if ($form->status === "accepted") {
-        return response()->json(['status' => 'form_accepted']);
-    }
 
-    return response()->json(['status' => 'unknown_error']);
-}
+            // Notification pour les comptable
+            $comptable = User::role('comptable')->first();
+            \Log::info('Comptable found: ', ['comptable' => $comptable]);
+
+            if ($comptable) {
+                $notif = Notification::create([
+                    'user_id' => $comptable->id,
+                    'type' => 'form_submission',
+                    'title' => "Nouvelle soumission de formulaire de {$user->name} pour le service « {$form->service->name} ».",
+                    'serviceLink' => "/dashboard/forms/{$form->id}",
+                    'isUnRead' => true,
+                ]);
+
+                $event = new FormSubmitted([
+                    'title' => $notif->title,
+                    'type' => 'form_submission',
+                    'link' => $notif->serviceLink
+                ], $comptable->id);
+
+                broadcast($event);
+
+                \Log::info('Broadcast event dispatched', [
+                    'event_class' => get_class($event),
+                    'notification' => $event->notification,
+                    'userId' => $event->userId,
+                ]);
+            }
+
+            return response()->json(['status' => 'submitted_for_review']);
+        }
+
+        if ($form->status === "review") {
+            return response()->json(['status' => 'form_in_review']);
+        }
+
+        if ($form->status === "accepted") {
+            return response()->json(['status' => 'form_accepted']);
+        }
+
+        return response()->json(['status' => 'unknown_error']);
+    }
 
     public function getForms()
     {
-        $forms = Form::with(['user', 'service', 'userDocuments.document'])->get();
+        $forms = Form::with(['user', 'service', 'helperForms'])->get();
 
         return response()->json($forms);
     }
@@ -77,12 +100,13 @@ class FormController extends Controller
     {
         $form = Form::with(['user', 'service'])->find($id);
 
-        if (! $form) {
+        if (!$form) {
             return response()->json(['message' => 'Formulaire introuvable'], 404);
         }
 
-        $user        = $form->user;
+        $user = $form->user;
         $serviceName = $form->service->name ?? 'le service concerné';
+        $serviceId = $form->service_id;
 
         // Delete associated documents
         $userDocuments = UserDocuments::where('form_id', $form->id)->get();
@@ -98,12 +122,19 @@ class FormController extends Controller
         // Send notification before deletion
         if ($user) {
             Notification::create([
-                'user_id'     => $user->id,
-                'type'        => 'form_deleted',
-                'title'       => "Votre formulaire pour <strong>{$serviceName}</strong> a été supprimé.",
+                'user_id' => $user->id,
+                'type' => 'form_deleted',
+                'title' => "Votre formulaire pour <strong>{$serviceName}</strong> a été supprimé.",
                 'serviceLink' => "/dashboard/forms", // or anywhere you redirect for forms list
-                'isUnRead'    => true,
+                'isUnRead' => true,
             ]);
+            broadcast(new FormSubmitted([
+                'title' => "Votre formulaire pour <strong>{$serviceName}</strong> a été supprimé.",
+                'type' => 'form_deleted',
+                'link' => "/dashboard/forms"
+            ], $user->id));
+
+
         }
 
         $form->delete();
@@ -119,7 +150,7 @@ class FormController extends Controller
 
         $form = Form::with(['user', 'service'])->find($id); // Eager load user and service
 
-        if (! $form) {
+        if (!$form) {
             return response()->json(['message' => 'Formulaire introuvable'], 404);
         }
 
@@ -130,42 +161,42 @@ class FormController extends Controller
         $form->status = $request->status;
         $form->save();
 
-        $user        = $form->user;
+        $user = $form->user;
         $serviceName = $form->service->name ?? 'le service concerné';
 
         $messages = [
             'accepted' => "Votre formulaire pour <strong>{$serviceName}</strong> a été accepté. Merci pour votre soumission.",
             'rejected' => "Votre formulaire pour <strong>{$serviceName}</strong> a été rejeté. Veuillez vérifier les informations fournies.",
-            'pending'  => "Votre formulaire pour <strong>{$serviceName}</strong> est en attente. Veuillez le remplir dès que possible.",
-            'review'   => "Votre formulaire pour <strong>{$serviceName}</strong> est en cours d'examen. Nous vous tiendrons informé sous peu.",
+            'pending' => "Votre formulaire pour <strong>{$serviceName}</strong> est en attente. Veuillez le remplir dès que possible.",
+            'review' => "Votre formulaire pour <strong>{$serviceName}</strong> est en cours d'examen. Nous vous tiendrons informé sous peu.",
         ];
 
         $types = [
             'accepted' => 'form_accepted',
             'rejected' => 'form_rejection',
-            'pending'  => 'form_submission',
-            'review'   => 'form_submission',
+            'pending' => 'form_submission',
+            'review' => 'form_submission',
         ];
 
         if ($user) {
             Notification::create([
-                'user_id'     => $user->id,
-                'type'        => $types[$form->status],
-                'title'       => $messages[$form->status],
+                'user_id' => $user->id,
+                'type' => $types[$form->status],
+                'title' => $messages[$form->status],
                 'serviceLink' => "/dashboard/forms/{$form->id}", // adjust if needed
-                'isUnRead'    => true,
+                'isUnRead' => true,
             ]);
-            // if ($user->email) {
-            //     Mail::to($user->email)->send(
-            //         new ChangeStatutsMail($messages[$form->status], $form->status)
-            //     );
-            // }
+            broadcast(new FormSubmitted([
+                'title' => $messages[$form->status],
+                'type' => $types[$form->status],
+                'link' => "/dashboard/forms/{$form->id}"
+            ], $user->id));
         }
-      
+
 
         return response()->json([
             'message' => 'Statut du formulaire mis à jour avec succès',
-            'form'    => $form,
+            'form' => $form,
         ]);
     }
 
@@ -190,7 +221,7 @@ class FormController extends Controller
 
         return response()->json([
             'message' => 'Found!',
-            'form'    => $form,
+            'form' => $form,
         ]);
     }
 
@@ -199,7 +230,7 @@ class FormController extends Controller
         // Retrieve the UserDocument by ID with the related form
         $userDocument = UserDocuments::with('form')->find($id);
 
-        if (! $userDocument) {
+        if (!$userDocument) {
             return response()->json(['message' => 'User document introuvable.'], 404); // Not Found
         }
         // Get the file path to delete it
@@ -227,33 +258,33 @@ class FormController extends Controller
     }
 
     public function getStatistics()
-{
-    $months = collect();
-    for ($i = 7; $i >= 0; $i--) {
-        $months->push(Carbon::now()->subMonths($i)->startOfMonth());
+    {
+        $months = collect();
+        for ($i = 7; $i >= 0; $i--) {
+            $months->push(Carbon::now()->subMonths($i)->startOfMonth());
+        }
+
+        $usersMonthly = $months->map(function ($date) {
+            return User::whereBetween('created_at', [$date, $date->copy()->endOfMonth()])->count();
+        });
+
+        $formsMonthly = $months->map(function ($date) {
+            return Form::whereBetween('created_at', [$date, $date->copy()->endOfMonth()])->count();
+        });
+
+        $documentsMonthly = $months->map(function ($date) {
+            return UserDocuments::whereBetween('created_at', [$date, $date->copy()->endOfMonth()])->count();
+        });
+
+        return response()->json([
+            'totalUsers' => User::count(),
+            'totalForms' => Form::count(),
+            'totalDocuments' => UserDocuments::count(),
+
+            'usersMonthly' => $usersMonthly,
+            'formsMonthly' => $formsMonthly,
+            'documentsMonthly' => $documentsMonthly,
+        ]);
     }
-
-    $usersMonthly = $months->map(function ($date) {
-        return User::whereBetween('created_at', [$date, $date->copy()->endOfMonth()])->count();
-    });
-
-    $formsMonthly = $months->map(function ($date) {
-        return Form::whereBetween('created_at', [$date, $date->copy()->endOfMonth()])->count();
-    });
-
-    $documentsMonthly = $months->map(function ($date) {
-        return UserDocuments::whereBetween('created_at', [$date, $date->copy()->endOfMonth()])->count();
-    });
-
-    return response()->json([
-        'totalUsers' => User::count(),
-        'totalForms' => Form::count(),
-        'totalDocuments' => UserDocuments::count(),
-
-        'usersMonthly' => $usersMonthly,
-        'formsMonthly' => $formsMonthly,
-        'documentsMonthly' => $documentsMonthly,
-    ]);
-}
 
 }

@@ -12,7 +12,6 @@ class Conversation extends Model
         'type',
         'user_one_id',
         'user_two_id',
-        'company_id',
     ];
 
     protected $casts = [
@@ -29,10 +28,6 @@ class Conversation extends Model
         return $this->belongsTo(User::class, 'user_two_id');
     }
 
-    public function company()
-    {
-        return $this->belongsTo(Company::class);
-    }
 
     public function messages()
     {

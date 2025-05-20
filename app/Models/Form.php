@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+use App\Models\HelperForms;
+
 class Form extends Model
 {
     use HasFactory;
@@ -29,4 +31,10 @@ class Form extends Model
     {
         return $this->hasMany(UserDocuments::class, 'form_id');
     }
+
+    public function helperForms()
+    {
+        return $this->hasMany(HelperForms::class);
+    }
+    
 }

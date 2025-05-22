@@ -85,7 +85,6 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials...'], 401);
         }
         $user = Auth::user();
-        \Log::info('User logged in: ' . $user);
 
         $roles = $user->roles ? $user->roles->pluck('name')->toArray() : [];
         if($user->hasRole('entreprise')) {

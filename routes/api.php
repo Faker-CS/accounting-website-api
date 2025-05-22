@@ -11,9 +11,11 @@ use App\Http\Controllers\ServiceController;
 use App\Http\Controllers\FormController;
 use App\Http\Controllers\DemandeAssignController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\EventController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Broadcast;
+
 
 
 
@@ -23,10 +25,6 @@ Route::post('login', [AuthController::class, 'login']);
 
 // Broadcasting auth (special handling)
 Route::post('/broadcasting/auth', function (Request $request) {
-    \Log::debug('Auth attempt', [
-        'user' => auth()->user(),
-        'channel_name' => $request->input('channel_name')
-    ]);
     
     if (!auth()->check()) {
         return response()->json(['error' => 'Unauthorized'], 403);
@@ -104,4 +102,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'getUserNotifications']);
     Route::patch('/notifications/read', [NotificationController::class, 'allRead']);
     Route::patch('/notifications/read/{id}', [NotificationController::class, 'read']);
+
+    // calendar
+    Route::apiResource('calendar', controller: EventController::class)->only(['index', 'store', 'update', 'destroy']);
+
 });

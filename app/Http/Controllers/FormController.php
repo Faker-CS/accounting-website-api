@@ -48,9 +48,8 @@ class FormController extends Controller
             ], $user->id));
 
 
-            // Notification pour les comptable
+            // Notification pour le comptable
             $comptable = User::role('comptable')->first();
-            \Log::info('Comptable found: ', ['comptable' => $comptable]);
 
             if ($comptable) {
                 $notif = Notification::create([
@@ -68,12 +67,6 @@ class FormController extends Controller
                 ], $comptable->id);
 
                 broadcast($event);
-
-                \Log::info('Broadcast event dispatched', [
-                    'event_class' => get_class($event),
-                    'notification' => $event->notification,
-                    'userId' => $event->userId,
-                ]);
             }
 
             return response()->json(['status' => 'submitted_for_review']);
@@ -92,7 +85,20 @@ class FormController extends Controller
 
     public function getForms()
     {
-        $forms = Form::with(['user', 'service', 'helperForms'])->get();
+        $user = auth()->user();
+        if ($user->hasRole('aide-comptable')) {
+            $forms = Form::with(['user', 'service', 'helperForms'])
+                ->whereHas('helperForms', function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                })->get();
+        } else {
+            $forms = Form::with(['user', 'service', 'helperForms'])->get();
+        }
+
+        \Log::info('Forms retrieved', [
+            'forms_count' => $forms->count(),
+            'forms' => $forms,
+        ]);
 
         return response()->json($forms);
     }

@@ -12,9 +12,13 @@ use App\Http\Controllers\FormController;
 use App\Http\Controllers\DemandeAssignController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\EventController;
+use App\Http\Controllers\CompanyFileController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Broadcast;
+use App\Http\Controllers\TaskController;
+use App\Http\Controllers\SubtaskController;
+use App\Http\Controllers\CommentController;
 
 
 
@@ -44,6 +48,10 @@ Route::middleware('auth:api')->group(function () {
     Route::apiResource('companies', CompanyController::class);
     Route::get('companies', [CompanyController::class, 'index']);
     Route::get('companies/{id}', [CompanyController::class, 'show']);
+    Route::get('/companies/{company}/files', [CompanyFileController::class, 'index']);
+    Route::post('/companies/{company}/files', [CompanyFileController::class, 'store']);
+    Route::delete('/companies/{company}/files', [CompanyFileController::class, 'destroy']);
+    Route::post('/companies/{company}/files/send-email', [CompanyFileController::class, 'sendFileByEmail']);
 
     // List all aide-comptables
     Route::get('/aideComptables', [AideComptableController::class, 'index']);
@@ -52,16 +60,28 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/aideComptable/{id}', [AideComptableController::class, 'update']);
 
     // chat routes
-    Route::get('conversations', [ChatController::class, 'getConversations']);
-    Route::post('new-conversation', [ChatController::class, 'createConversation']);
-    Route::get('conversations/{id}', [ChatController::class, 'getConversationById']);
-    Route::post('send-messages', [ChatController::class, 'sendMessage']);
-    Route::post('conversations/{id}/seen', [ChatController::class, 'MarkAsSeen']);
-    Route::get('contacts/{id}', [ChatController::class, 'getContacts']);
+    Route::get('/contacts/{id}', [ChatController::class, 'getContacts']);
+    Route::get('/conversations', [ChatController::class, 'getConversations']);
+    Route::get('/conversations/{id}', [ChatController::class, 'getConversationById']);
+    Route::post('/conversations', [ChatController::class, 'createConversation']);
+    Route::post('/messages', [ChatController::class, 'sendMessage']);
+    Route::post('/conversations/{id}/mark-as-seen', [ChatController::class, 'markAsSeen']);
+
+    // Group conversation management
+    Route::post('/conversations/{id}/add-participant', [ChatController::class, 'addParticipant']);
+    Route::post('/conversations/{id}/remove-participant', [ChatController::class, 'removeParticipant']);
+
+    // File upload for chat messages
+    Route::post('/messages/with-attachment', [ChatController::class, 'sendMessageWithAttachment']);
+
+    // Read receipts for group conversations
+    Route::post('/conversations/{id}/read-receipt', [ChatController::class, 'updateReadReceipt']);
+    Route::get('/conversations/{id}/read-receipts', [ChatController::class, 'getReadReceipts']);
 
     // User profile routes
     Route::get('/profile', [UserController::class, 'edit']);
     Route::put('/profile', [UserController::class, 'update']);
+    Route::post('/profile', [UserController::class, 'update']);
 
     // manage documents
     Route::delete('/documents/{id}', [DocumentController::class, 'destroy']);
@@ -83,6 +103,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/forms', [FormController::class, 'getForms']);
     Route::delete('/forms/{id}', [FormController::class, 'destroy']);
     Route::patch('/forms/{id}', [FormController::class, 'update']);
+    Route::post('/forms/{id}/accept', [FormController::class, 'acceptDemand']);
     Route::get('/forms/{id}', [FormController::class, 'get']);
     Route::delete('/forms/document/{id}', [FormController::class, 'documentDelete']);
     Route::get('/statistics', [FormController::class, 'getStatistics']);
@@ -102,8 +123,28 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'getUserNotifications']);
     Route::patch('/notifications/read', [NotificationController::class, 'allRead']);
     Route::patch('/notifications/read/{id}', [NotificationController::class, 'read']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 
     // calendar
     Route::apiResource('calendar', controller: EventController::class)->only(['index', 'store', 'update', 'destroy']);
+    // Task routes
+    Route::get('/tasks', [TaskController::class, 'index']);
+    Route::post('/tasks', [TaskController::class, 'store']);
+    Route::put('/tasks/{id}', [TaskController::class, 'update']);
+    Route::delete('/tasks/{id}', [TaskController::class, 'destroy']);
+
+    // Subtask routes
+    Route::post('/tasks/{task}/subtasks', [SubtaskController::class, 'store']);
+    Route::put('/subtasks/{id}', [SubtaskController::class, 'update']);
+    Route::delete('/subtasks/{id}', [SubtaskController::class, 'destroy']);
+
+    // Comment routes
+    Route::get('/tasks/{task}/comments', [CommentController::class, 'index']);
+    Route::post('/tasks/{task}/comments', [CommentController::class, 'store']);
+    Route::delete('/comments/{id}', [CommentController::class, 'destroy']);
+
+    
 
 });
+
+Route::post('auth/forgot-password', [AuthController::class, 'forgotPassword']);

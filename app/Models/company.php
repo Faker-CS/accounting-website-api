@@ -11,7 +11,7 @@ class company extends Model
     use HasFactory;
     protected $table = 'companies';
     protected $fillable = [
-        'name',
+        'company_name',
         'description',
         'logo',
         'founded',
@@ -38,6 +38,7 @@ class company extends Model
         'phone_number',
         'status',
         'industry',
+        
     ];
 
     /**
@@ -52,19 +53,6 @@ class company extends Model
         ];
     }
 
-
-    public function industries()
-    {
-        return $this->belongsToMany(Industry::class, 'company_industry', 'company_id', 'industry_id')
-            ->withPivot('company_id', 'industry_id');
-    }
-
-    public function activities()
-    {
-        return $this->belongsToMany(Activity::class, 'company_activity', 'company_id', 'activity_id')
-            ->withPivot('company_id', 'activity_id');
-    }
-
     public function user()
     {
         return $this->belongsTo(User::class, 'user_id', 'id');
@@ -74,6 +62,7 @@ class company extends Model
     {
         return $this->hasMany(Message::class, 'sender_id')->where('sender_type', 'company');
     }
+    
     public function receivedMessages()
     {
         return $this->hasMany(Message::class, 'receiver_id');

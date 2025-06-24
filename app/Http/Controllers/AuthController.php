@@ -105,6 +105,7 @@ class AuthController extends Controller
                 'updated_at' => $user->updated_at,
                 'roles' => $roles, // Only role names, e.g., ["aide-comptable"]
                 'photo' => $user->photo,
+                'company_id' => $user->company_id,
             ],
             'accessToken' => $token,
         ]);
@@ -138,6 +139,23 @@ class AuthController extends Controller
                 'updated_at' => $user->updated_at,
                 'roles' => $roleName,
                 'photo' => $user->photo,
+                'company_id' => $user->company_id,
             ],);
+    }
+
+    public function forgotPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+        $user = \App\Models\User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json(['message' => 'User not found'], 404);
+        }
+        $password = \Str::random(10);
+        $user->password = \Hash::make($password);
+        $user->save();
+        \Mail::to($user->email)->send(new \App\Mail\CredentialsMail($user, $password));
+        return response()->json(['message' => 'Password reset and sent by email.']);
     }
 }

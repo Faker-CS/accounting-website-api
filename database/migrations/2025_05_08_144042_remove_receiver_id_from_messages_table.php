@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration {
     /**
@@ -10,13 +11,24 @@ return new class extends Migration {
      */
     public function up()
     {
-        Schema::table('messages', function (Blueprint $table) {
-            // First drop the foreign key constraint
-            $table->dropForeign(['receiver_id']);
+        // Check if the foreign key exists and drop it using pure SQL
+        $fkName = null;
+        $dbName = DB::getDatabaseName();
+        $result = DB::select(
+            "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'messages' AND COLUMN_NAME = 'receiver_id' AND REFERENCED_COLUMN_NAME IS NOT NULL",
+            [$dbName]
+        );
+        if (!empty($result)) {
+            $fkName = $result[0]->CONSTRAINT_NAME;
+            DB::statement("ALTER TABLE messages DROP FOREIGN KEY `$fkName`");
+        }
 
-            // Then drop the column
-            $table->dropColumn('receiver_id');
-        });
+        // Drop the column if it exists
+        if (Schema::hasColumn('messages', 'receiver_id')) {
+            Schema::table('messages', function (Blueprint $table) {
+                $table->dropColumn('receiver_id');
+            });
+        }
     }
 
     public function down()

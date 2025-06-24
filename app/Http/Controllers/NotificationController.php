@@ -45,4 +45,11 @@ class NotificationController extends Controller
         return response()->json(['status' => 'error', 'message' => 'No notifications to mark as read.']);
 
     }
+
+    public function destroy($id)
+    {
+        $notification = Notification::findOrFail($id);
+        $notification->delete();
+        return response()->json(['status' => 'success', 'message' => 'Notification deleted.']);
+    }
 }

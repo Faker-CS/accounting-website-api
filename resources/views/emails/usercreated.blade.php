@@ -12,7 +12,7 @@
 
     <!-- Header with Gradient -->
     <div style="background: linear-gradient(135deg, #4f46e5, #7c3aed); color: white; text-align: center; padding: 40px 20px;">
-      <img src="https://via.placeholder.com/150x50/4f46e5/ffffff?text=MoneyTeers" alt="MoneyTeers Logo" style="max-width: 180px; margin-bottom: 20px;">
+      <img src="c:\Users\ASUS\OneDrive\Desktop\pfe-faker\starter-vite-js\public\logo\logo-single.png" alt="MoneyTeers Logo" style="max-width: 180px; margin-bottom: 20px;">
       <h1 style="margin: 0; font-size: 28px; font-weight: 700;">Welcome to the Family!</h1>
       <p style="margin: 10px 0 0; opacity: 0.9; font-size: 16px;">We're thrilled to have you onboard.</p>
     </div>

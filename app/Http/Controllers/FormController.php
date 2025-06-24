@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 // use App\Mail\ChangeStatutsMail;
 use App\Events\FormSubmitted;
 use Illuminate\Support\Facades\Mail;
+use App\Models\Task;
 
 class FormController extends Controller
 {
@@ -33,16 +34,37 @@ class FormController extends Controller
             $form->status = 'review';
             $form->save();
 
-            // Notification pour l’utilisateur
+            // Update company status from Pending to Active if this is the first demand
+            $company = $user->company;
+            if ($company && $company->status === 'Pending') {
+                $company->status = 'Active';
+                $company->save();
+            }
+
+            // create a task for the form
+            if($form->service->type !== 'Authorization Request'){
+                Task::create([
+                    'form_id' => $form->id,
+                    'title' => $form->service->name,
+                    'description' => "New demand for {$form->service->name}",
+                    'reporter_id' => $user->id,
+                    'assignee_id' => null,
+                    'due_date' => now()->addDays(7),
+                    'priority' => 'Medium',
+                    'status' => 'To Do'
+                ]);
+            }
+
+            // Notification pour l'utilisateur
             Notification::create([
                 'user_id' => $user->id,
                 'type' => 'form_submission',
-                'title' => 'Votre formulaire a été soumis pour examen.',
+                'title' => 'Your form has been submitted for review.',
                 'serviceLink' => $serviceId,
                 'isUnRead' => true,
             ]);
             broadcast(new FormSubmitted([
-                'title' => 'Votre formulaire a été soumis pour examen.',
+                'title' => 'Your form has been submitted for review.',
                 'type' => 'form_submission',
                 'link' => $serviceId
             ], $user->id));
@@ -55,7 +77,7 @@ class FormController extends Controller
                 $notif = Notification::create([
                     'user_id' => $comptable->id,
                     'type' => 'form_submission',
-                    'title' => "Nouvelle soumission de formulaire de {$user->name} pour le service « {$form->service->name} ».",
+                    'title' => "New form submission from {$user->name} for the service '{$form->service->name}'.",
                     'serviceLink' => "/dashboard/forms/{$form->id}",
                     'isUnRead' => true,
                 ]);
@@ -111,7 +133,7 @@ class FormController extends Controller
         }
 
         $user = $form->user;
-        $serviceName = $form->service->name ?? 'le service concerné';
+        $serviceName = $form->service->name ?? 'the service in question';
         $serviceId = $form->service_id;
 
         // Delete associated documents
@@ -130,12 +152,12 @@ class FormController extends Controller
             Notification::create([
                 'user_id' => $user->id,
                 'type' => 'form_deleted',
-                'title' => "Votre formulaire pour <strong>{$serviceName}</strong> a été supprimé.",
+                'title' => "Your form for {$serviceName} has been deleted !",
                 'serviceLink' => "/dashboard/forms", // or anywhere you redirect for forms list
                 'isUnRead' => true,
             ]);
             broadcast(new FormSubmitted([
-                'title' => "Votre formulaire pour <strong>{$serviceName}</strong> a été supprimé.",
+                'title' => "Your form for {$serviceName} has been deleted !",
                 'type' => 'form_deleted',
                 'link' => "/dashboard/forms"
             ], $user->id));
@@ -151,7 +173,7 @@ class FormController extends Controller
     public function update(Request $request, $id)
     {
         $request->validate([
-            'status' => 'required|string|in:pending,review,rejected,accepted',
+            'status' => 'required|string|in:pending,review,rejected,accepted,in_work',
         ]);
 
         $form = Form::with(['user', 'service'])->find($id); // Eager load user and service
@@ -171,10 +193,11 @@ class FormController extends Controller
         $serviceName = $form->service->name ?? 'le service concerné';
 
         $messages = [
-            'accepted' => "Votre formulaire pour <strong>{$serviceName}</strong> a été accepté. Merci pour votre soumission.",
-            'rejected' => "Votre formulaire pour <strong>{$serviceName}</strong> a été rejeté. Veuillez vérifier les informations fournies.",
-            'pending' => "Votre formulaire pour <strong>{$serviceName}</strong> est en attente. Veuillez le remplir dès que possible.",
-            'review' => "Votre formulaire pour <strong>{$serviceName}</strong> est en cours d'examen. Nous vous tiendrons informé sous peu.",
+            'accepted' => "Your form for {$serviceName} has been accepted. Thank you for your submission.",
+            'rejected' => "Your form for {$serviceName} is missing some files. Please review the provided information.",
+            'pending' => "Your form for {$serviceName} is checked by our and we completed it. Please review the verification files.",
+            'review' => "Your form for {$serviceName} is under review. We will keep you informed shortly.",
+            'in_work' => "Your form for {$serviceName} is now being processed by our team."
         ];
 
         $types = [
@@ -182,6 +205,7 @@ class FormController extends Controller
             'rejected' => 'form_rejection',
             'pending' => 'form_submission',
             'review' => 'form_submission',
+            'in_work' => 'form_in_work'
         ];
 
         if ($user) {
@@ -189,7 +213,7 @@ class FormController extends Controller
                 'user_id' => $user->id,
                 'type' => $types[$form->status],
                 'title' => $messages[$form->status],
-                'serviceLink' => "/dashboard/forms/{$form->id}", // adjust if needed
+                'serviceLink' => "/dashboard/forms/{$form->id}",
                 'isUnRead' => true,
             ]);
             broadcast(new FormSubmitted([
@@ -199,9 +223,44 @@ class FormController extends Controller
             ], $user->id));
         }
 
-
         return response()->json([
             'message' => 'Statut du formulaire mis à jour avec succès',
+            'form' => $form,
+        ]);
+    }
+
+    public function acceptDemand($id)
+    {
+        $form = Form::with(['user', 'service'])->find($id);
+
+        if (!$form) {
+            return response()->json(['message' => 'Formulaire introuvable'], 404);
+        }
+
+        // Change status to in_work
+        $form->status = 'in_work';
+        $form->save();
+
+        $user = $form->user;
+        $serviceName = $form->service->name ?? 'le service concerné';
+
+        if ($user) {
+            Notification::create([
+                'user_id' => $user->id,
+                'type' => 'form_in_work',
+                'title' => "Your form for {$serviceName} is now being processed by our team.",
+                'serviceLink' => "/dashboard/forms/{$form->id}",
+                'isUnRead' => true,
+            ]);
+            broadcast(new FormSubmitted([
+                'title' => "Your form for {$serviceName} is now being processed by our team.",
+                'type' => 'form_in_work',
+                'link' => "/dashboard/forms/{$form->id}"
+            ], $user->id));
+        }
+
+        return response()->json([
+            'message' => 'Demand accepted and status updated to in work',
             'form' => $form,
         ]);
     }
@@ -257,7 +316,6 @@ class FormController extends Controller
         $remainingDocuments = UserDocuments::where('form_id', $formId)->count();
         if ($remainingDocuments === 0) {
             Form::where('id', $formId)->delete();
-            \Log::info("Form ID $formId deleted because no documents remain.");
         }
 
         return response()->json(['message' => 'Document et fichier supprimés avec succès'], 200);

@@ -11,9 +11,11 @@ return new class extends Migration {
             $table->id();
             $table->unsignedBigInteger('conversation_id');
             $table->unsignedBigInteger('sender_id');
-            $table->unsignedBigInteger('receiver_id')->nullable(); // Nullable for group conversations
             $table->text('body');
+            $table->string('content_type')->default('text'); // text, image, file
+            $table->json('attachments')->nullable(); // Store attachment metadata
             $table->boolean('seen')->default(false);
+            $table->timestamp('seen_at')->nullable();
             $table->timestamps();
 
             // Foreign key constraints
@@ -27,15 +29,10 @@ return new class extends Migration {
                 ->on('users')
                 ->onDelete('cascade');
 
-            $table->foreign('receiver_id')
-                ->references('id')
-                ->on('users')
-                ->onDelete('cascade');
-
             // Indexes for better performance
+            $table->index(['conversation_id', 'created_at']);
             $table->index(['conversation_id', 'seen']);
             $table->index(['sender_id', 'created_at']);
-            $table->index(['receiver_id','seen']);
         });
     }
 

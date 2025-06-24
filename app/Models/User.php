@@ -79,4 +79,8 @@ class User extends Authenticatable implements JWTSubject
         return $this->hasMany(HelperForms::class);
     }
     
+    public function forms()
+    {
+        return $this->hasMany(Form::class);
+    }
 }

@@ -11,6 +11,7 @@ use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
 
 class CompanyController extends Controller implements HasMiddleware
 {
@@ -36,7 +37,7 @@ class CompanyController extends Controller implements HasMiddleware
     public function index(Request $request)
     {
         try {
-            $query = Company::with(['industries', 'activities', 'user'])
+            $query = Company::with(['user'])
                 ->when($request->search, fn($q) => $q->where('company_name', 'LIKE', '%' . $request->search . '%'))
                 ->when($request->status, fn($q) => $q->where('status', $request->status))
                 ->when($request->industry_id, fn($q) => $q->whereHas('industries', fn($q) => $q->where('id', $request->industry_id)));
@@ -54,21 +55,18 @@ class CompanyController extends Controller implements HasMiddleware
     {
         $validator = Validator::make($request->all(), [
             'name' => 'nullable|string|max:255',
-            'description' => 'required|string',
-            'logo' => 'image|max:3072',
+            'logo' => 'nullable|image|max:3072',
             'founded' => 'required|date',
             'raison_sociale' => 'required|string|max:255',
-            
-            'numero_tva' => 'nullable|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'phone_number' => 'required|string|max:20',
             'numero_siren' => 'nullable|string|max:255',
-            
             'forme_juridique' => 'required|in:EIRL,SARL,EURL,SAS,SASU,SA',
             'code_company_type' => 'required|in:APE,NEF',
             'code_company_value' => 'required|string|max:255',
             'adresse_siege_social' => 'required|string|max:255',
             'code_postale' => 'required|string|max:10',
             'ville' => 'required|string|max:255',
-            
             'chiffre_affaire' => 'nullable|numeric',
             'tranche_a' => 'nullable|numeric',
             'tranche_b' => 'nullable|numeric',
@@ -78,53 +76,119 @@ class CompanyController extends Controller implements HasMiddleware
             'moyenne_age_cadres' => 'nullable|integer',
             'nombre_salaries_non_cadres' => 'nullable|integer',
             'moyenne_age_non_cadres' => 'nullable|integer',
+            'Industrie' => 'required|string|max:255',
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
+            return response()->json(['errors' => $validator->errors()], 422);
         }
-        
+
+        DB::beginTransaction();
         try {
             $data = $validator->validated();
-            // creation user account
-            $password = \Str::random(8); // Generate a random password
-            $user = User::create([
-                'name' => $request->name,
-                'email' => $request->email,
-                'password' => \Hash::make($password),
-            ]);
 
-            if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not created',
-                ], 500);
+            // Convert founded date to Y-m-d format for MySQL
+            if (isset($data['founded'])) {
+                $data['founded'] = date('Y-m-d', strtotime($data['founded']));
             }
-            // Assign role to user
-            $user->assignRole('entreprise');
-            // Attach user to company
-            // Handle logo upload
-            $data['logo'] = $request->file('logo')->store('company-logos', 'public');
 
-            // send the user an email
-            $table = [
+            // Handle logo upload first
+            $logoPath = null;
+            if ($request->hasFile('logo')) {
+                $logoPath = $request->file('logo')->store('company-logos', 'public');
+                $data['logo'] = $logoPath;
+            }
+
+            // Create user account
+            $password = \Str::random(8);
+            $user = User::create([
+                'name' => $data['name'] ?? $data['raison_sociale'],
+                'email' => $data['email'],
+                'password' => \Hash::make($password),
+                'phoneNumber' => $data['phone_number'],
+                'address' => $data['adresse_siege_social'],
+                'zipCode' => $data['code_postale'],
+                'city' => $data['ville'],
+                'photo' => $logoPath, // set user photo to logo if uploaded
+            ]);
+            if (!$user) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'User not created'], 500);
+            }
+            $user->assignRole('entreprise');
+
+            // Company logo: use uploaded logo or user's photo
+            $companyLogo = $logoPath ?? $user->photo;
+
+            // Create company
+            $company = Company::create([
+                'company_name' => $data['name'] ?? $data['raison_sociale'],
+                'logo' => $companyLogo,
+                'founded' => $data['founded'],
+                'raison_sociale' => $data['raison_sociale'],
+                'email' => $data['email'],
+                'phone_number' => $data['phone_number'],
+                'numero_siren' => $data['numero_siren'] ?? null,
+                'forme_juridique' => $data['forme_juridique'],
+                'code_company_type' => $data['code_company_type'],
+                'code_company_value' => $data['code_company_value'],
+                'adresse_siege_social' => $data['adresse_siege_social'],
+                'code_postale' => $data['code_postale'],
+                'ville' => $data['ville'],
+                'chiffre_affaire' => $data['chiffre_affaire'] ?? null,
+                'tranche_a' => $data['tranche_a'] ?? null,
+                'tranche_b' => $data['tranche_b'] ?? null,
+                'nombre_salaries' => $data['nombre_salaries'] ?? null,
+                'moyenne_age' => $data['moyenne_age'] ?? null,
+                'nombre_salaries_cadres' => $data['nombre_salaries_cadres'] ?? null,
+                'moyenne_age_cadres' => $data['moyenne_age_cadres'] ?? null,
+                'nombre_salaries_non_cadres' => $data['nombre_salaries_non_cadres'] ?? null,
+                'moyenne_age_non_cadres' => $data['moyenne_age_non_cadres'] ?? null,
+                'user_id' => $user->id,
+                'status' => 'Pending',
+                'industry' => $data['Industrie']
+            ]);
+            if (!$company) {
+                DB::rollBack();
+                return response()->json(['success' => false, 'message' => 'Company not created'], 500);
+            }
+
+            // Update user with company_id
+            $user->company_id = $company->id;
+            $user->save();
+
+            // Send welcome email
+            $emailData = [
                 'view' => 'emails.companycreated',
-                'subject' => 'welcome to our platform..you can now login',
+                'subject' => 'Welcome to MoneyTeers - Your Company Account Is Ready!',
                 'data' => [
                     'name' => $user->name,
                     'email' => $user->email,
                     'password' => $password,
                 ],
             ];
-            //send mail to entreprise email
-            \Mail::to($user->email)->send(new CompanyCreatedMail($table['view'], $table['subject'], $table['data'], null));
 
-            $company = Company::create($data);
-            $user->company_id = $company->id;
-            $user->save();
-            
+            \Mail::to($user->email)->send(new CompanyCreatedMail(
+                $emailData['view'],
+                $emailData['subject'],
+                $emailData['data'],
+                null
+            ));
+
+            DB::commit();
+            return response()->json([
+                'success' => true,
+                'message' => 'Company created successfully',
+                'data' => $company
+            ], 201);
+
         } catch (\Exception $e) {
-            return response()->json(['message' => $e->getMessage()], 500);
+            DB::rollBack();
+            \Log::error('Company creation failed: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Company creation failed: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -160,7 +224,6 @@ class CompanyController extends Controller implements HasMiddleware
                 'ville' => $request->city,
                 'email' => $request->email,
                 'phone_number' => $request->phoneNumber,
-                'numero_tva' => $request->matriculeFiscale,
                 'numero_siren' => $request->siren,
                 'status' => $request->status,
                 'raison_sociale' => $request->raisonSociale,

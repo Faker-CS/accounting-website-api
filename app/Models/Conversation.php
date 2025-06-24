@@ -8,27 +8,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class Conversation extends Model
 {
     use HasFactory;
+    
     protected $fillable = [
         'type',
-        'user_one_id',
-        'user_two_id',
     ];
 
     protected $casts = [
-        'type' => 'string', // Cast for enum
+        'type' => 'string',
     ];
 
     // Relationships
-    public function userOne()
-    {
-        return $this->belongsTo(User::class, 'user_one_id');
-    }
-    public function userTwo()
-    {
-        return $this->belongsTo(User::class, 'user_two_id');
-    }
-
-
     public function messages()
     {
         return $this->hasMany(Message::class);
@@ -45,24 +34,9 @@ class Conversation extends Model
                     ->withTimestamps();
     }
 
-    public function creator()
-    {
-        return $this->belongsTo(User::class, 'creator_id');
-    }
-
-    // Helper methods to get other participants
-    public function getOtherParticipant($userId)
-    {
-        if ($this->type === 'user-user') {
-            return $this->user_one_id == $userId ? $this->userTwo : $this->userOne;
-        } else {
-            return $this->company;
-        }
-    }
-
     // Helper method to check if user is in the conversation
     public function hasUser($userId)
     {
-        return $this->user_one_id == $userId || $this->user_two_id == $userId;
+        return $this->participants()->where('user_id', $userId)->exists();
     }
 }

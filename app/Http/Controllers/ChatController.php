@@ -11,26 +11,45 @@ use App\Models\Company;
 use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Facades\JWTAuth;
 use Illuminate\Support\Facades\Validator;
+use App\Models\HelperForms;
+use App\Models\Form;
 
 class ChatController extends Controller
 {
     public function sendMessage(Request $request)
     {
-
-        $request->validate([
-            'body' => 'nullable|string',
+        $user = Auth::user();
+        
+        $validator = Validator::make($request->all(), [
+            'conversation_id' => 'required|exists:conversations,id',
+            'body' => 'required|string',
         ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        // Verify user is part of the conversation
+        $conversation = Conversation::whereHas('participants', function ($query) use ($user) {
+            $query->where('user_id', $user->id);
+        })->findOrFail($request->conversation_id);
 
         $message = Message::create([
             'conversation_id' => $request->conversation_id,
-            'sender_id' => $user->id ?? 1,
+            'sender_id' => $user->id,
             'body' => $request->body,
             'seen' => false,
         ]);
 
+        // Load the sender relationship for the broadcast
+        $message->load('sender');
+
         broadcast(new MessageSent($message))->toOthers();
 
-        return response()->json($message);
+        return response()->json([
+            'message' => $message,
+            'conversation' => $conversation
+        ]);
     }
 
     public function getConversations()
@@ -41,7 +60,6 @@ class ChatController extends Controller
         })
             ->with([
                 'participants',
-                'company',
                 'messages' => function ($q) {
                     $q->latest()->limit(1);
                 }
@@ -49,7 +67,37 @@ class ChatController extends Controller
             ->latest()
             ->get();
 
-        return response()->json($conversations, 200);
+        // Format the response to match frontend expectations
+        $formattedConversations = [
+            'allIds' => $conversations->pluck('id')->toArray(),
+            'byId' => $conversations->mapWithKeys(function ($conversation) {
+                return [$conversation->id => [
+                    'id' => $conversation->id,
+                    'type' => $conversation->type,
+                    'participants' => $conversation->participants->map(function ($participant) {
+                        return [
+                            'id' => $participant->id,
+                            'name' => $participant->name,
+                            'avatarUrl' => $participant->photoURL,
+                            'role' => $participant->role,
+                            'status' => 'online'
+                        ];
+                    })->toArray(),
+                    'messages' => $conversation->messages->map(function ($message) {
+                        return [
+                            'id' => $message->id,
+                            'body' => $message->body,
+                            'createdAt' => $message->created_at,
+                            'senderId' => $message->sender_id,
+                            'seen' => $message->seen
+                        ];
+                    })->toArray(),
+                    'unreadCount' => $conversation->messages->where('seen', false)->count()
+                ]];
+            })->toArray()
+        ];
+
+        return response()->json($formattedConversations, 200);
     }
 
     public function getConversationById($id)
@@ -73,107 +121,193 @@ class ChatController extends Controller
 
     public function getContacts($id)
     {
-        $user = User::find($id);
+        $user = Auth::user();
+        \Log::info('Getting contacts for user:', ['user_id' => $user->id, 'roles' => $user->getRoleNames()]);
+        
+        $contacts = [];
 
+        // Get contacts based on user role
         if ($user->hasRole('comptable')) {
-            // Comptable can see all aide-comptables and all entreprises
-            $contacts = User::whereHas('roles', function ($query) {
-                $query->whereIn('name', ['aide-comptable', 'entreprise']);
-            })->get();
+            // Comptable can chat with all aide-comptables and companies
+            $contacts = User::role(['aide-comptable', 'entreprise'])->get();
+            \Log::info('Comptable contacts:', ['count' => $contacts->count()]);
         } elseif ($user->hasRole('aide-comptable')) {
-            // Aide-comptable can see entreprises they're responsible for
-            $contacts = User::whereHas('roles', function ($query) {
-                $query->where('name', 'entreprise');
-            })
-                ->where('responsible_id', $user->id)
+            // Aide-comptable can chat with their responsible companies and main comptable
+            $formIds = HelperForms::where('user_id', $user->id)->pluck('form_id');
+            $responsibleCompanies = User::role('entreprise')
+                ->whereHas('forms', function($query) use ($formIds) {
+                    $query->whereIn('id', $formIds);
+                })
                 ->get();
-        } else {
-            // Entreprise can see their responsible (aide-comptable or comptable)
-            $contacts = collect([$user->responsible]);
+            $mainComptable = User::role('comptable')->first();
+            
+            $contacts = collect([$mainComptable])
+                ->merge($responsibleCompanies)
+                ->filter();
+            \Log::info('Aide-comptable contacts:', [
+                'responsible_companies' => $responsibleCompanies->count(),
+                'main_comptable' => $mainComptable ? 'found' : 'not found',
+                'total' => $contacts->count()
+            ]);
+        } elseif ($user->hasRole('entreprise')) {
+            // Company can only chat with their assigned aide-comptable and main comptable
+            $formIds = Form::where('user_id', $user->id)->pluck('id');
+            $assignedAideComptable = User::role('aide-comptable')
+                ->whereHas('helperForms', function($query) use ($formIds) {
+                    $query->whereIn('form_id', $formIds);
+                })
+                ->first();
+            $mainComptable = User::role('comptable')->first();
+            
+            $contacts = collect([$assignedAideComptable, $mainComptable])
+                ->filter();
+            \Log::info('Entreprise contacts:', [
+                'assigned_aide_comptable' => $assignedAideComptable ? 'found' : 'not found',
+                'main_comptable' => $mainComptable ? 'found' : 'not found',
+                'total' => $contacts->count()
+            ]);
         }
 
+        // Format contacts for frontend
+        $formattedContacts = $contacts->map(function ($contact) {
+            $role = $contact->roles->first();
+            $photoUrl = $contact->photo ? asset('storage/' . $contact->photo) : null;
+            
+            $formattedContact = [
+                'id' => $contact->id,
+                'name' => $contact->name,
+                'email' => $contact->email,
+                'avatarUrl' => $photoUrl,
+                'role' => $role ? $role->name : 'no role',
+                'status' => 'online',
+                'phoneNumber' => $contact->phoneNumber,
+                'lastActivity' => now(),
+            ];
+
+            \Log::info('Formatted contact:', $formattedContact);
+            return $formattedContact;
+        });
+
+        \Log::info('Final formatted contacts:', ['count' => $formattedContacts->count()]);
+        
         return response()->json([
-            'contacts' => $contacts
+            'contacts' => $formattedContacts
         ]);
     }
 
     public function createConversation(Request $request)
     {
-        // \Log::info('Request Data: ', $request->all());
-        $requestData = $request->input('conversationData', $request->all());
-        $validated = Validator::make($requestData, [
-            'type' => 'nullable|in:ONE_TO_ONE,GROUP',
-            'participants' => 'required|array|min:1',
-            'participants.*.id' => 'required|exists:users,id',
-            'messages' => 'required|array|min:1',
-            'messages.0.senderId' => 'required|exists:users,id',
-            'messages.0.body' => 'nullable|string',
-            'company_id' => 'nullable|exists:companies,id'
-        ])->validate();
+        $user = Auth::user();
 
-        $participantIds = array_map(function ($participant) {
-            return (int) $participant['id'];
-        }, $validated['participants']);
+        // Debug log incoming request
+        \Log::info('createConversation request', [
+            'recipient_ids' => $request->input('recipient_ids', []),
+            'recipient_id' => $request->input('recipient_id'),
+            'user_id' => $user->id,
+        ]);
 
-        $currentUserId = Auth::id() ?: 1;
-
-
-
-        // Ensure current user is included
-        if (!in_array($currentUserId, $participantIds)) {
-            $participantIds[] = $currentUserId;
+        // Accept either recipient_id (for one-to-one) or recipient_ids (for group)
+        $recipientIds = $request->input('recipient_ids', []);
+        if (empty($recipientIds) && $request->has('recipient_id')) {
+            $recipientIds = [$request->recipient_id];
         }
 
-        sort($participantIds);
+        // Always include the current user
+        $participantIds = array_unique(array_merge([$user->id], $recipientIds));
 
-        // If type is ONE_TO_ONE, prevent duplicate conversations
-        if ($validated['type'] === 'ONE_TO_ONE') {
-            $existing = Conversation::where('type', 'user-user')
-                ->whereHas('participants', function ($query) use ($participantIds) {
-                    $query->whereIn('user_id', $participantIds);
-                }, '=', count($participantIds))
-                ->withCount('participants')
-                ->get()
-                ->first(function ($conv) use ($participantIds) {
-                    return $conv->participants_count === count($participantIds);
-                });
+        // Determine conversation type
+        $type = count($participantIds) > 2 ? 'GROUP' : 'ONE_TO_ONE';
 
-            if ($existing) {
-                return response()->json($existing->load(['participants', 'messages']), 200);
+        // Debug log participantIds and type
+        \Log::info('createConversation participants', [
+            'participantIds' => $participantIds,
+            'type' => $type,
+        ]);
+
+        // For one-to-one, check if conversation already exists
+        if ($type === 'ONE_TO_ONE') {
+            $otherUserId = collect($participantIds)->first(fn($id) => $id != $user->id);
+            $existingConversation = Conversation::where('type', 'ONE_TO_ONE')
+                ->whereHas('participants', function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                })
+                ->whereHas('participants', function ($query) use ($otherUserId) {
+                    $query->where('user_id', $otherUserId);
+                })
+                ->with(['participants', 'messages'])
+                ->first();
+
+            if ($existingConversation) {
+                return response()->json($existingConversation);
             }
         }
 
         // Create new conversation
         $conversation = Conversation::create([
-            'type' => $validated['type'] === 'GROUP' ? 'group' : 'user-user',
-            'company_id' => $validated['company_id'] ?? null
+            'type' => $type,
+            'name' => $type === 'GROUP' ? ($request->input('name') ?? 'Group Chat') : null,
         ]);
+        $conversation->participants()->attach($participantIds);
 
-        // Attach participants
-        $userIds = collect($validated['participants'])->pluck('id')->toArray();
-        $conversation->participants()->attach(array_unique([...$userIds, $currentUserId]));
-
-        \Log::info('Conversation Created: ', [$conversation->id]);
-
-
-        // save first message
-        if (!empty($validated['messages'])) {
-            $messageData = $validated['messages'][0];
-            \Log::info('Message Data: ', [$messageData]);
-            $conversation->messages()->create([
+        // If a message is provided, create it
+        $message = null;
+        if ($request->filled('message')) {
+            $message = Message::create([
                 'conversation_id' => $conversation->id,
-                'sender_id' => $messageData['senderId'] ?? $currentUserId,
-                'body' => $messageData['body'],
-                'content_type' => $messageData['contentType'] ?? 'text'
+                'sender_id' => $user->id,
+                'body' => $request->message,
+                'seen' => false,
             ]);
         }
-        \Log::info('Validation Errors: ', $requestData->errors()->toArray());
 
-        return response()->json($conversation->load(['participants', 'company', 'messages']), 201);
+        // Load participants and messages for the response
+        $conversation->load(['participants', 'messages']);
+
+        return response()->json([
+            'conversation' => $conversation,
+            'message' => $message,
+        ]);
     }
 
+    private function validateChatPermission($user, $recipient)
+    {
+        if ($user->hasRole('comptable')) {
+            // Comptable can chat with all aide-comptables and companies
+            return $recipient->hasRole('aide-comptable') || $recipient->hasRole('entreprise');
+        }
 
+        if ($user->hasRole('aide-comptable')) {
+            // Aide-comptable can chat with their responsible companies and main comptable
+            if ($recipient->hasRole('comptable')) {
+                return true;
+            }
+            if ($recipient->hasRole('entreprise')) {
+                return $recipient->forms()
+                    ->whereHas('helperForms', function($query) use ($user) {
+                        $query->where('user_id', $user->id);
+                    })
+                    ->exists();
+            }
+            return false;
+        }
 
+        if ($user->hasRole('entreprise')) {
+            // Company can only chat with their assigned aide-comptable and main comptable
+            if ($recipient->hasRole('comptable')) {
+                return true;
+            }
+            if ($recipient->hasRole('aide-comptable')) {
+                return $user->forms()
+                    ->whereHas('helperForms', function($query) use ($recipient) {
+                        $query->where('user_id', $recipient->id);
+                    })
+                    ->exists();
+            }
+            return false;
+        }
+
+        return false;
+    }
 
     public function markAsSeen($conversationId)
     {
@@ -190,5 +324,117 @@ class ChatController extends Controller
         return response()->json([
             'message' => 'Conversation marked as seen.'
         ]);
+    }
+
+    /**
+     * Add a participant to a group conversation (admin only)
+     */
+    public function addParticipant(Request $request, $conversationId)
+    {
+        $user = Auth::user();
+        $conversation = Conversation::findOrFail($conversationId);
+        // Only admins can add participants
+        $isAdmin = $conversation->participants()->where('user_id', $user->id)->first()?->pivot?->is_admin;
+        if (!$isAdmin) {
+            return response()->json(['message' => 'Only admins can add participants'], 403);
+        }
+        $participantId = $request->input('user_id');
+        if ($conversation->participants()->where('user_id', $participantId)->exists()) {
+            return response()->json(['message' => 'User already in conversation'], 409);
+        }
+        $conversation->participants()->attach($participantId);
+        return response()->json(['message' => 'Participant added successfully']);
+    }
+
+    /**
+     * Remove a participant from a group conversation (admin only)
+     */
+    public function removeParticipant(Request $request, $conversationId)
+    {
+        $user = Auth::user();
+        $conversation = Conversation::findOrFail($conversationId);
+        $isAdmin = $conversation->participants()->where('user_id', $user->id)->first()?->pivot?->is_admin;
+        if (!$isAdmin) {
+            return response()->json(['message' => 'Only admins can remove participants'], 403);
+        }
+        $participantId = $request->input('user_id');
+        if (!$conversation->participants()->where('user_id', $participantId)->exists()) {
+            return response()->json(['message' => 'User not in conversation'], 404);
+        }
+        $conversation->participants()->detach($participantId);
+        return response()->json(['message' => 'Participant removed successfully']);
+    }
+
+    /**
+     * Send a message with optional file attachment
+     */
+    public function sendMessageWithAttachment(Request $request)
+    {
+        $user = Auth::user();
+        $validator = Validator::make($request->all(), [
+            'conversation_id' => 'required|exists:conversations,id',
+            'body' => 'nullable|string',
+            'attachment' => 'nullable|file|max:10240', // 10MB max
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+        $conversation = Conversation::whereHas('participants', function ($query) use ($user) {
+            $query->where('user_id', $user->id);
+        })->findOrFail($request->conversation_id);
+        $attachmentPath = null;
+        $attachmentType = null;
+        if ($request->hasFile('attachment')) {
+            $file = $request->file('attachment');
+            $attachmentPath = $file->store('uploads/chat', 'public');
+            $attachmentType = $file->getClientMimeType();
+        }
+        $message = Message::create([
+            'conversation_id' => $request->conversation_id,
+            'sender_id' => $user->id,
+            'body' => $request->body,
+            'seen' => false,
+            'attachment_path' => $attachmentPath,
+            'attachment_type' => $attachmentType,
+        ]);
+        $message->load('sender');
+        broadcast(new MessageSent($message))->toOthers();
+        return response()->json([
+            'message' => $message,
+            'conversation' => $conversation
+        ]);
+    }
+
+    /**
+     * Update read receipt for a group conversation (per user)
+     */
+    public function updateReadReceipt($conversationId)
+    {
+        $user = Auth::user();
+        $conversation = Conversation::whereHas('participants', function ($query) use ($user) {
+            $query->where('user_id', $user->id);
+        })->findOrFail($conversationId);
+        $conversation->participants()->updateExistingPivot($user->id, [
+            'last_read_at' => now(),
+        ]);
+        return response()->json(['message' => 'Read receipt updated.']);
+    }
+
+    /**
+     * Get read receipts for a group conversation
+     */
+    public function getReadReceipts($conversationId)
+    {
+        $conversation = Conversation::with(['participants' => function($q) {
+            $q->select('users.id', 'name', 'conversation_user.last_read_at');
+        }])->findOrFail($conversationId);
+        $receipts = $conversation->participants->map(function($participant) {
+            return [
+                'user_id' => $participant->id,
+                'name' => $participant->name,
+                'last_read_at' => $participant->pivot->last_read_at,
+            ];
+        });
+        return response()->json(['receipts' => $receipts]);
     }
 }

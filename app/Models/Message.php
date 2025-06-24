@@ -16,13 +16,16 @@ class Message extends Model
         'body',
         'content_type',
         'seen',
+        'attachment_path',
+        'attachment_type',
     ];
 
     protected $casts = [
         'seen' => 'boolean',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
-
+        'attachment_path' => 'string',
+        'attachment_type' => 'string'
     ];
 
     // Relationships

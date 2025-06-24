@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -11,14 +12,36 @@ return new class extends Migration
      */
     public function up()
     {
-        Schema::table('conversations', function (Blueprint $table) {
-            // First drop foreign key constraints
-            $table->dropForeign(['user_one_id']);
-            $table->dropForeign(['user_two_id']);
-            
-            // Then drop the columns
-            $table->dropColumn(['user_one_id', 'user_two_id']);
-        });
+        // Check and drop foreign key for user_one_id
+        $dbName = DB::getDatabaseName();
+        $result1 = DB::select(
+            "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'conversations' AND COLUMN_NAME = 'user_one_id' AND REFERENCED_COLUMN_NAME IS NOT NULL",
+            [$dbName]
+        );
+        if (!empty($result1)) {
+            $fkName1 = $result1[0]->CONSTRAINT_NAME;
+            DB::statement("ALTER TABLE conversations DROP FOREIGN KEY `$fkName1`");
+        }
+
+        // Check and drop foreign key for user_two_id
+        $result2 = DB::select(
+            "SELECT CONSTRAINT_NAME FROM information_schema.KEY_COLUMN_USAGE WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'conversations' AND COLUMN_NAME = 'user_two_id' AND REFERENCED_COLUMN_NAME IS NOT NULL",
+            [$dbName]
+        );
+        if (!empty($result2)) {
+            $fkName2 = $result2[0]->CONSTRAINT_NAME;
+            DB::statement("ALTER TABLE conversations DROP FOREIGN KEY `$fkName2`");
+        }
+
+        // Drop the columns if they exist
+        if (Schema::hasColumn('conversations', 'user_one_id') || Schema::hasColumn('conversations', 'user_two_id')) {
+            Schema::table('conversations', function (Blueprint $table) {
+                $drop = [];
+                if (Schema::hasColumn('conversations', 'user_one_id')) $drop[] = 'user_one_id';
+                if (Schema::hasColumn('conversations', 'user_two_id')) $drop[] = 'user_two_id';
+                if (!empty($drop)) $table->dropColumn($drop);
+            });
+        }
     }
 
     /**

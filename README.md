@@ -1,66 +1,121 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Accountant API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This is the backend API for the Accountant application, a platform for managing accounting tasks, documents, clients, and communication between accountants and their clients.
 
-## About Laravel
+## About The Project
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+This API provides a comprehensive set of endpoints to support the Accountant web application. It includes features like:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+*   **User Authentication:** Secure user login and registration using JWT.
+*   **Company Management:** CRUD operations for companies and their associated files.
+*   **Role-Based Access Control:** Differentiated permissions for different user roles (e.g., `entreprise`, `comptable`).
+*   **Document Handling:** Upload, download, and manage various types of documents.
+*   **Form Processing:** Submission and management of different service forms (e.g., SARL registration).
+*   **Real-time Chat:** One-on-one and group chat functionality with file attachments and read receipts.
+*   **Task Management:** Create, update, and manage tasks and sub-tasks.
+*   **Notifications:** In-app notifications for important events.
+*   **Calendar:** Manage events and schedules.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Built With
 
-## Learning Laravel
+*   [Laravel](https://laravel.com/) (v12.0)
+*   [PHP](https://www.php.net/) (v8.2)
+*   [Tymon JWT-Auth](https://jwt-auth.readthedocs.io/en/develop/) for authentication
+*   [Spatie Laravel Permission](https://spatie.be/docs/laravel-permission/v6/introduction) for roles and permissions
+*   [Pusher](https://pusher.com/) for real-time functionalities
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+## Getting Started
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+To get a local copy up and running, follow these simple steps.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Prerequisites
 
-## Laravel Sponsors
+Make sure you have the following installed on your development machine:
+*   PHP >= 8.2
+*   [Composer](https://getcomposer.org/)
+*   Node.js & NPM
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Installation
 
-### Premium Partners
+1.  **Clone the repository**
+    ```sh
+    git clone <your-repo-url>
+    cd accountant-api-app
+    ```
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+2.  **Install PHP dependencies**
+    ```sh
+    composer install
+    ```
 
-## Contributing
+3.  **Install NPM dependencies**
+    ```sh
+    npm install
+    ```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+4.  **Create your environment file**
+    ```sh
+    cp .env.example .env
+    ```
 
-## Code of Conduct
+5.  **Generate an application key**
+    ```sh
+    php artisan key:generate
+    ```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+6.  **Configure your database**
+    Open the `.env` file and set your database connection details (DB_DATABASE, DB_USERNAME, DB_PASSWORD).
 
-## Security Vulnerabilities
+7.  **Run database migrations and seeders**
+    The seeders will populate the database with initial data, like user roles and services.
+    ```sh
+    php artisan migrate --seed
+    ```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+8.  **Set up JWT secret**
+    ```sh
+    php artisan jwt:secret
+    ```
 
-## License
+## Running the Application
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+You can run the development server, queue worker, and other necessary processes using the custom `dev` script.
+
+```sh
+composer run dev
+```
+
+Alternatively, you can run the Laravel development server by itself:
+```sh
+php artisan serve
+```
+The API will be available at `http://localhost:8000`.
+
+## Running Tests
+
+To run the automated test suite for this project, use the following command:
+
+```sh
+php artisan test
+```
+
+## API Endpoints
+
+The API is protected by JWT authentication. You need to obtain a token from the `/api/login` endpoint and include it in the `Authorization` header of your requests as a Bearer token.
+
+Here is a summary of the available API resources:
+
+*   **Authentication**: `POST /api/login`, `POST /api/logout`, `GET /api/user`
+*   **Companies**: `GET|POST|PUT|DELETE /api/companies/{id}`
+*   **Company Files**: `GET|POST|DELETE /api/companies/{company}/files`
+*   **Aide Comptables**: `GET|POST|PUT|DELETE /api/aideComptable/{id}`
+*   **Chat**: `/api/conversations`, `/api/messages`
+*   **User Profile**: `GET|PUT /api/profile`
+*   **Documents**: `GET|POST|DELETE /api/documents`
+*   **Forms**: `GET|POST|PATCH|DELETE /api/forms/{id}`
+*   **Services**: `GET /api/services`
+*   **Notifications**: `GET|PATCH|DELETE /api/notifications`
+*   **Calendar**: `GET|POST|PUT|DELETE /api/calendar/{id}`
+*   **Tasks**: `GET|POST|PUT|DELETE /api/tasks/{id}`
+
+For detailed information on all endpoints and their parameters, please refer to the `routes/api.php` file.

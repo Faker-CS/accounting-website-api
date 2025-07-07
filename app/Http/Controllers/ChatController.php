@@ -206,48 +206,36 @@ class ChatController extends Controller
             'user_id' => $user->id,
         ]);
 
-        // Accept either recipient_id (for one-to-one) or recipient_ids (for group)
-        $recipientIds = $request->input('recipient_ids', []);
-        if (empty($recipientIds) && $request->has('recipient_id')) {
-            $recipientIds = [$request->recipient_id];
+        // Accepter uniquement recipient_id (ONE_TO_ONE)
+        $recipientId = $request->input('recipient_id');
+        if (!$recipientId) {
+            return response()->json(['error' => 'Vous devez sélectionner un destinataire.'], 422);
+        }
+        if ($recipientId == $user->id) {
+            return response()->json(['error' => 'Vous ne pouvez pas discuter avec vous-même.'], 422);
         }
 
-        // Always include the current user
-        $participantIds = array_unique(array_merge([$user->id], $recipientIds));
+        // Vérifier si une conversation ONE_TO_ONE existe déjà
+        $existingConversation = Conversation::where('type', 'ONE_TO_ONE')
+            ->whereHas('participants', function ($query) use ($user) {
+                $query->where('user_id', $user->id);
+            })
+            ->whereHas('participants', function ($query) use ($recipientId) {
+                $query->where('user_id', $recipientId);
+            })
+            ->with(['participants', 'messages'])
+            ->first();
 
-        // Determine conversation type
-        $type = count($participantIds) > 2 ? 'GROUP' : 'ONE_TO_ONE';
-
-        // Debug log participantIds and type
-        \Log::info('createConversation participants', [
-            'participantIds' => $participantIds,
-            'type' => $type,
-        ]);
-
-        // For one-to-one, check if conversation already exists
-        if ($type === 'ONE_TO_ONE') {
-            $otherUserId = collect($participantIds)->first(fn($id) => $id != $user->id);
-            $existingConversation = Conversation::where('type', 'ONE_TO_ONE')
-                ->whereHas('participants', function ($query) use ($user) {
-                    $query->where('user_id', $user->id);
-                })
-                ->whereHas('participants', function ($query) use ($otherUserId) {
-                    $query->where('user_id', $otherUserId);
-                })
-                ->with(['participants', 'messages'])
-                ->first();
-
-            if ($existingConversation) {
-                return response()->json($existingConversation);
-            }
+        if ($existingConversation) {
+            return response()->json(['conversation' => $existingConversation]);
         }
 
         // Create new conversation
         $conversation = Conversation::create([
-            'type' => $type,
-            'name' => $type === 'GROUP' ? ($request->input('name') ?? 'Group Chat') : null,
+            'type' => 'ONE_TO_ONE',
+            'name' => null,
         ]);
-        $conversation->participants()->attach($participantIds);
+        $conversation->participants()->attach([$user->id, $recipientId]);
 
         // If a message is provided, create it
         $message = null;
@@ -331,38 +319,19 @@ class ChatController extends Controller
      */
     public function addParticipant(Request $request, $conversationId)
     {
-        $user = Auth::user();
-        $conversation = Conversation::findOrFail($conversationId);
-        // Only admins can add participants
-        $isAdmin = $conversation->participants()->where('user_id', $user->id)->first()?->pivot?->is_admin;
-        if (!$isAdmin) {
-            return response()->json(['message' => 'Only admins can add participants'], 403);
-        }
-        $participantId = $request->input('user_id');
-        if ($conversation->participants()->where('user_id', $participantId)->exists()) {
-            return response()->json(['message' => 'User already in conversation'], 409);
-        }
-        $conversation->participants()->attach($participantId);
-        return response()->json(['message' => 'Participant added successfully']);
+        return response()->json(['error' => 'Ajout de participants non supporté en mode ONE_TO_ONE.'], 403);
     }
-
-    /**
-     * Remove a participant from a group conversation (admin only)
-     */
     public function removeParticipant(Request $request, $conversationId)
     {
-        $user = Auth::user();
-        $conversation = Conversation::findOrFail($conversationId);
-        $isAdmin = $conversation->participants()->where('user_id', $user->id)->first()?->pivot?->is_admin;
-        if (!$isAdmin) {
-            return response()->json(['message' => 'Only admins can remove participants'], 403);
-        }
-        $participantId = $request->input('user_id');
-        if (!$conversation->participants()->where('user_id', $participantId)->exists()) {
-            return response()->json(['message' => 'User not in conversation'], 404);
-        }
-        $conversation->participants()->detach($participantId);
-        return response()->json(['message' => 'Participant removed successfully']);
+        return response()->json(['error' => 'Suppression de participants non supportée en mode ONE_TO_ONE.'], 403);
+    }
+    public function updateReadReceipt($conversationId)
+    {
+        return response()->json(['error' => 'Read receipt non supporté en mode ONE_TO_ONE.'], 403);
+    }
+    public function getReadReceipts($conversationId)
+    {
+        return response()->json(['error' => 'Read receipt non supporté en mode ONE_TO_ONE.'], 403);
     }
 
     /**
@@ -403,38 +372,5 @@ class ChatController extends Controller
             'message' => $message,
             'conversation' => $conversation
         ]);
-    }
-
-    /**
-     * Update read receipt for a group conversation (per user)
-     */
-    public function updateReadReceipt($conversationId)
-    {
-        $user = Auth::user();
-        $conversation = Conversation::whereHas('participants', function ($query) use ($user) {
-            $query->where('user_id', $user->id);
-        })->findOrFail($conversationId);
-        $conversation->participants()->updateExistingPivot($user->id, [
-            'last_read_at' => now(),
-        ]);
-        return response()->json(['message' => 'Read receipt updated.']);
-    }
-
-    /**
-     * Get read receipts for a group conversation
-     */
-    public function getReadReceipts($conversationId)
-    {
-        $conversation = Conversation::with(['participants' => function($q) {
-            $q->select('users.id', 'name', 'conversation_user.last_read_at');
-        }])->findOrFail($conversationId);
-        $receipts = $conversation->participants->map(function($participant) {
-            return [
-                'user_id' => $participant->id,
-                'name' => $participant->name,
-                'last_read_at' => $participant->pivot->last_read_at,
-            ];
-        });
-        return response()->json(['receipts' => $receipts]);
     }
 }

@@ -60,23 +60,15 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/aideComptable/{id}', [AideComptableController::class, 'update']);
 
     // chat routes
-    Route::get('/contacts/{id}', [ChatController::class, 'getContacts']);
+    Route::get('/chat/contacts/{id}', [ChatController::class, 'getContacts']);
     Route::get('/conversations', [ChatController::class, 'getConversations']);
     Route::get('/conversations/{id}', [ChatController::class, 'getConversationById']);
-    Route::post('/conversations', [ChatController::class, 'createConversation']);
-    Route::post('/messages', [ChatController::class, 'sendMessage']);
-    Route::post('/conversations/{id}/mark-as-seen', [ChatController::class, 'markAsSeen']);
-
-    // Group conversation management
-    Route::post('/conversations/{id}/add-participant', [ChatController::class, 'addParticipant']);
-    Route::post('/conversations/{id}/remove-participant', [ChatController::class, 'removeParticipant']);
+    Route::post('/chat/send-messages', [ChatController::class, 'sendMessage']);
+    Route::post('/chat/create-conversation', [ChatController::class, 'createConversation']);
+    Route::post('/chat/conversations/{id}/mark-as-seen', [ChatController::class, 'markAsSeen']);
 
     // File upload for chat messages
     Route::post('/messages/with-attachment', [ChatController::class, 'sendMessageWithAttachment']);
-
-    // Read receipts for group conversations
-    Route::post('/conversations/{id}/read-receipt', [ChatController::class, 'updateReadReceipt']);
-    Route::get('/conversations/{id}/read-receipts', [ChatController::class, 'getReadReceipts']);
 
     // User profile routes
     Route::get('/profile', [UserController::class, 'edit']);

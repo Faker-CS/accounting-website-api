@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use App\Models\company;
 use App\Mail\SendCompanyFileMail;
 
@@ -16,7 +18,7 @@ class CompanyFileController extends Controller
 
         $fileUrls = array_map(function ($file) {
             $size = Storage::disk('public')->size($file);
-            $mimeType = Storage::disk('public')->mimeType($file);
+            $mimeType = mime_content_type( Storage::disk('public')->path($file));
             $lastModified = Storage::disk('public')->lastModified($file);
 
             return [
@@ -115,10 +117,26 @@ class CompanyFileController extends Controller
             return response()->json(['message' => 'File not found'], 404);
         }
         try {
-            \Mail::to($email)->send(new SendCompanyFileMail($filePath, $fileName));
+            Mail::to($email)->send(new SendCompanyFileMail(
+                $filePath,
+                $fileName,
+                'Livraison de document - ATFcompta+',
+                ['recipient_email' => $email]
+            ));
 
+            Log::info('Company file sent successfully', [
+                'company_id' => $company->id,
+                'file_name' => $fileName,
+                'recipient_email' => $email
+            ]);
         } catch (\Exception $e) {
-            // return response()->json(['message' => 'Failed to send email: ' . $e->getMessage()], 500);
+            Log::error('Failed to send company file', [
+                'company_id' => $company->id,
+                'file_name' => $fileName,
+                'recipient_email' => $email,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['message' => 'Failed to send email: ' . $e->getMessage()], 500);
         }
         return response()->json(['message' => 'Email sent successfully']);
     }

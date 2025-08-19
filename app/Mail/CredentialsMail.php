@@ -32,7 +32,7 @@ class CredentialsMail extends Mailable
      */
     public function build()
     {
-        return $this->subject('Your Account Credentials')
+        return $this->subject('Vos identifiants de compte - ATFcompta+')
             ->view('emails.usercreated')
             ->with([
                 'data' => [

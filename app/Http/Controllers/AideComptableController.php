@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use App\Mail\UserCreated;
 
 
@@ -24,7 +26,7 @@ class AideComptableController extends Controller
      */
     public function store(Request $request)
     {
-        \Log::info('User creation request', [
+        Log::info('User creation request', [
             'request' => $request->all(),
         ]);
         $validator = Validator::make($request->all(), [
@@ -32,10 +34,7 @@ class AideComptableController extends Controller
             'email' => 'required|email|unique:users',
             'avatarUrl' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'phoneNumber' => 'nullable|string|max:255',
-            'city' => 'nullable|string|max:100',
-            'state' => 'nullable|string|max:50',
             'address' => 'nullable|string|max:255',
-            'zipCode' => 'nullable|integer',
         ]);
 
         if ($validator->fails()) {
@@ -47,16 +46,17 @@ class AideComptableController extends Controller
         }
 
         try {
-            $path = $request->file('avatarUrl')->store('uploads', 'public');
+            $path = null;
+            if ($request->hasFile('avatarUrl')) {
+                $path = $request->file('avatarUrl')->store('uploads', 'public');
+            }
+            
             $password = \Str::random(8); // Generate a random password
             $user = User::create([
                 'name' => $request->name,
                 'email' => $request->email,
                 'phoneNumber' => $request->phoneNumber,
-                'city' => $request->city,
-                'state' => $request->state,
                 'address' => $request->address,
-                'zipCode' => $request->zipCode,
                 'password' => \Hash::make($password),
                 'photo' => $path,
             ]);
@@ -72,20 +72,31 @@ class AideComptableController extends Controller
             $user->assignRole('aide-comptable');
 
             // send the user an email
-            $table = [
-                'view' => 'emails.usercreated',
-                'subject' => 'welcome to our platform..you can now login',
-                'data' => [
+            try {
+                $mailData = [
                     'name' => $user->name,
                     'email' => $user->email,
                     'password' => $password,
-                ],
-            ];
+                ];
 
-            try {
-                \Mail::to($user->email)->send(new UserCreated($table['view'], $table['subject'], $table['data'], null));
+                Mail::to($user->email)->send(new UserCreated(
+                    'emails.usercreated',
+                    'Bienvenue sur notre plateforme - Vous pouvez maintenant vous connecter',
+                    $mailData,
+                    null
+                ));
+
+                Log::info('Welcome email sent successfully', [
+                    'user_id' => $user->id,
+                    'email' => $user->email
+                ]);
             } catch (\Exception $e) {
-                // Handle the error
+                Log::error('Failed to send welcome email', [
+                    'user_id' => $user->id,
+                    'email' => $user->email,
+                    'error' => $e->getMessage()
+                ]);
+                // Continue execution even if email fails
             }
             return response()->json([
                 'email' => $user->email,

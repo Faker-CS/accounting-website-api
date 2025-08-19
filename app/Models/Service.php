@@ -33,6 +33,11 @@ class Service extends Model
         return $this->hasMany(Form::class);
     }
 
+    public function tasks()
+    {
+        return $this->hasMany(Task::class);
+    }
+
     public function companies()
     {
         return $this->belongsToMany(Company::class, 'company_services')
@@ -43,6 +48,11 @@ class Service extends Model
     public function companyServices()
     {
         return $this->hasMany(CompanyService::class);
+    }
+
+    public function subtaskTemplates()
+    {
+        return $this->hasMany(SubtaskTemplate::class)->orderBy('order');
     }
 
     // Scope for default services

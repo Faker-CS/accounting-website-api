@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Broadcast;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\SubtaskController;
+use App\Http\Controllers\SubtaskTemplateController;
 use App\Http\Controllers\CommentController;
 use App\Http\Controllers\EmployeeController;
 
@@ -154,6 +155,10 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/tasks/{task}/subtasks', [SubtaskController::class, 'store']);
     Route::put('/subtasks/{id}', [SubtaskController::class, 'update']);
     Route::delete('/subtasks/{id}', [SubtaskController::class, 'destroy']);
+
+    // Subtask template routes
+    Route::apiResource('subtask-templates', SubtaskTemplateController::class);
+    Route::post('/subtask-templates/reorder', [SubtaskTemplateController::class, 'reorder']);
 
     // Comment routes
     Route::get('/tasks/{task}/comments', [CommentController::class, 'index']);

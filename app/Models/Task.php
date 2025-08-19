@@ -8,6 +8,7 @@ class Task extends Model
 {
     protected $fillable = [
         'form_id',
+        'service_id',
         'title',
         'description',
         'reporter_id',
@@ -26,14 +27,26 @@ class Task extends Model
         return $this->belongsTo(Form::class);
     }
 
+    public function service()
+    {
+        return $this->belongsTo(Service::class);
+    }
+
     public function reporter()
     {
-        return $this->belongsTo(User::class, 'reporter_id');
+        return $this->belongsTo(Company::class, 'reporter_id');
     }
 
     public function assignee()
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function assignees()
+    {
+        return $this->belongsToMany(User::class, 'task_assignees', 'task_id', 'user_id')
+                    ->withPivot('assigned_at')
+                    ->withTimestamps();
     }
 
     public function subtasks()

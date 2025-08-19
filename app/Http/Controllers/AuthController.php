@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Models\User;
 use App\Mail\CredentialsMail;
@@ -148,18 +149,39 @@ class AuthController extends Controller
         $request->validate([
             'email' => 'required|email',
         ]);
-        $user = \App\Models\User::where('email', $request->email)->first();
+        
+        $user = User::where('email', $request->email)->first();
         if (!$user) {
             return response()->json(['message' => 'User not found'], 404);
         }
-        $password = \Str::random(10);
-        $user->password = \Hash::make($password);
+
+        // Generate new password
+        $newPassword = Str::random(12);
+        
+        // Update user password
+        $user->password = Hash::make($newPassword);
         $user->save();
+
         try {
-            \Mail::to($user->email)->send(new \App\Mail\CredentialsMail($user, $password));
+            Mail::to($user->email)->send(new CredentialsMail($user, $newPassword));
+
+            Log::info('Password reset email sent successfully', [
+                'user_id' => $user->id,
+                'email' => $user->email
+            ]);
+
         } catch (\Exception $e) {
-            // Handle the error
+            Log::error('Failed to send password reset email', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['message' => 'Failed to send reset email'], 500);
         }
-        return response()->json(['message' => 'Password reset and sent by email.']);
+
+        return response()->json([
+            'message' => 'Password reset successfully. Check your email for the new password.',
+            'success' => true
+        ]);
     }
 }

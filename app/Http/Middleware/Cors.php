@@ -16,10 +16,10 @@ class Cors
         }
 
         return $response
-            ->header('Access-Control-Allow-Origin', 'http://localhost:3031')
+            ->header('Access-Control-Allow-Origin', '*')
             ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-            ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-CSRF-TOKEN')
-            ->header('Access-Control-Allow-Credentials', 'true')
+            ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, X-CSRF-TOKEN, Accept')
+            ->header('Access-Control-Allow-Credentials', 'false')
             ->header('Access-Control-Max-Age', '86400'); // 24 hours
     }
 } 

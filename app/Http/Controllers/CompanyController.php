@@ -13,6 +13,8 @@ use Illuminate\Routing\Controllers\Middleware;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 
 class CompanyController extends Controller implements HasMiddleware
@@ -172,24 +174,32 @@ class CompanyController extends Controller implements HasMiddleware
             }
 
             // Send welcome email
-            $emailData = [
-                'view' => 'emails.companycreated',
-                'subject' => 'Welcome to MoneyTeers - Your Company Account Is Ready!',
-                'data' => [
+            try {
+                $emailData = [
                     'name' => $user->name,
                     'email' => $user->email,
                     'password' => $password,
-                ],
-            ];
-            try {
-            \Mail::to($user->email)->send(new CompanyCreatedMail(
-                $emailData['view'],
-                $emailData['subject'],
-                $emailData['data'],
-                null
-            ));
+                ];
+
+                Mail::to($user->email)->send(new CompanyCreatedMail(
+                    'emails.companycreated',
+                    'Bienvenue chez ATFcompta+ - Votre compte entreprise est prêt !',
+                    $emailData,
+                    null
+                ));
+
+                Log::info('Company welcome email sent successfully', [
+                    'user_id' => $user->id,
+                    'company_id' => $company->id,
+                    'email' => $user->email
+                ]);
             } catch (\Exception $e) {
-                \Log::error('Failed to send welcome email: ' . $e->getMessage());
+                Log::error('Failed to send company welcome email', [
+                    'user_id' => $user->id,
+                    'company_id' => $company->id,
+                    'email' => $user->email,
+                    'error' => $e->getMessage()
+                ]);
             }
 
             DB::commit();

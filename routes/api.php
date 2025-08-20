@@ -114,6 +114,9 @@ Route::middleware('auth:api')->group(function () {
         Route::put('/services/{id}', [ServiceController::class, 'update']);
         Route::delete('/services/{id}', [ServiceController::class, 'destroy']);
         Route::post('/companies/{companyId}/assign-default-services', [ServiceController::class, 'assignDefaultServicesToCompany']);
+        
+        // Aide-comptable management (comptable only)
+        Route::post('/aideComptable/{id}/toggle-block', [AideComptableController::class, 'toggleBlockStatus']);
     });
 
     // Company service management

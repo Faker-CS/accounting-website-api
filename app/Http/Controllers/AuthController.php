@@ -82,10 +82,31 @@ class AuthController extends Controller
     {
         $credentials = $request->only('email', 'password');
 
-        if (!$token = JWTAuth::attempt($credentials)) {
+        // First check if user exists and credentials are valid
+        if (!Auth::attempt($credentials)) {
             return response()->json(['message' => 'Invalid credentials...'], 401);
         }
+        
         $user = Auth::user();
+
+        // Check if user is blocked before creating token
+        if ($user->is_blocked) {
+            // Log out the user immediately
+            Auth::logout();
+            
+            // Determine language from Accept-Language header
+            $acceptLanguage = $request->header('Accept-Language', 'en');
+            $isFrench = str_contains($acceptLanguage, 'fr');
+            
+            $message = $isFrench 
+                ? 'Votre compte a été bloqué par le comptable. Veuillez contacter l\'administrateur.'
+                : 'Your account has been blocked by the accountant. Please contact the administrator.';
+                
+            return response()->json(['message' => $message], 403);
+        }
+
+        // Now create the JWT token
+        $token = JWTAuth::fromUser($user);
 
         $roles = $user->roles ? $user->roles->pluck('name')->toArray() : [];
         if($user->hasRole('entreprise')) {

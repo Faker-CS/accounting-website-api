@@ -156,4 +156,22 @@ class AideComptableController extends Controller
             return response()->json(['message' => 'User not found'], 404);
         }
     }
+
+    /**
+     * Block or unblock a user.
+     */
+    public function toggleBlockStatus(Request $request, string $id)
+    {
+        $user = User::role("aide-comptable")->findOrFail($id);
+        
+        $user->is_blocked = !$user->is_blocked;
+        $user->save();
+
+        $status = $user->is_blocked ? 'blocked' : 'unblocked';
+        
+        return response()->json([
+            'message' => "User has been {$status} successfully",
+            'is_blocked' => $user->is_blocked
+        ]);
+    }
 }

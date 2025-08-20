@@ -23,6 +23,7 @@ class User extends Authenticatable implements JWTSubject
         'address',
         'zipCode',
         'photo',
+        'is_blocked',
     ];
 
     protected $hidden = [
@@ -34,6 +35,7 @@ class User extends Authenticatable implements JWTSubject
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
         'phoneNumber' => 'string',
+        'is_blocked' => 'boolean',
     ];
 
     // JWTSubject
